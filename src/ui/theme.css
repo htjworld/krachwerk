@@ -1,0 +1,228 @@
+:root {
+  --bg-device: #0d1117;
+  --fg-device: #39d353;
+  --fg-device-dim: #3fb950;
+  --bg-ambient-a: #fafaf8;
+  --bg-ambient-b: #39d353;
+  --accent-blue: #58a6ff;
+  --panel: #21262d;
+  --playhead: #3a3a3a;
+  --text-on-ambient: #0d1117;
+  --font-device: "Courier New", "D2Coding", "Noto Sans Mono CJK KR", monospace;
+  --font-frame: -apple-system, BlinkMacSystemFont, "Segoe UI", "Pretendard", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-frame);
+  color: var(--text-on-ambient);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.ambient-bg {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  animation: krachwerk-ambient 10s ease-in-out infinite;
+}
+
+@keyframes krachwerk-ambient {
+  0%,
+  45% {
+    background-color: var(--bg-ambient-a);
+  }
+  50%,
+  95% {
+    background-color: var(--bg-ambient-b);
+  }
+  100% {
+    background-color: var(--bg-ambient-a);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-bg {
+    animation: none;
+    background-color: var(--bg-ambient-a);
+  }
+}
+
+.device-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+  width: 100%;
+  max-width: 420px;
+}
+
+.device {
+  width: 100%;
+  max-width: 420px;
+  background: var(--bg-device);
+  color: var(--fg-device);
+  font-family: var(--font-device);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+
+.device-heading {
+  font-family: var(--font-frame);
+  color: var(--fg-device);
+  margin: 0 0 4px;
+}
+
+.device-subheading {
+  font-family: var(--font-frame);
+  color: var(--fg-device-dim);
+  margin: 0 0 20px;
+  font-size: 0.9em;
+}
+
+.device-label {
+  display: block;
+  text-transform: uppercase;
+  font-size: 0.8em;
+  color: var(--fg-device-dim);
+  margin-bottom: 6px;
+}
+
+.device-input {
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--fg-device-dim);
+  color: var(--fg-device);
+  font-family: var(--font-device);
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 1em;
+}
+
+.device-input:focus {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 1px;
+}
+
+.device-button {
+  background: var(--panel);
+  border: 1px solid var(--fg-device-dim);
+  color: var(--fg-device);
+  font-family: var(--font-device);
+  padding: 8px 14px;
+  border-radius: 6px;
+}
+
+.device-button:hover,
+.device-button:focus-visible {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.device-button[aria-pressed="true"] {
+  background: var(--fg-device);
+  color: var(--bg-device);
+  border-color: var(--fg-device);
+}
+
+.device-button-primary {
+  background: var(--fg-device);
+  color: var(--bg-device);
+  border: none;
+  font-weight: bold;
+  padding: 10px 16px;
+  border-radius: 6px;
+}
+
+.device-text-button {
+  background: none;
+  border: none;
+  color: var(--fg-device-dim);
+  font-family: var(--font-device);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 6px 4px;
+}
+
+.device-text-button:hover,
+.device-text-button:focus-visible {
+  color: var(--accent-blue);
+}
+
+.trait-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.language-toggle {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+
+.matrix-grid {
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  gap: 3px;
+  margin: 12px 0;
+}
+
+.matrix-cell {
+  aspect-ratio: 1;
+  background: var(--panel);
+  border: 1px solid rgba(63, 185, 80, 0.25);
+  border-radius: 2px;
+  padding: 0;
+}
+
+.matrix-cell[aria-pressed="true"] {
+  background: var(--fg-device);
+  border-color: var(--fg-device);
+}
+
+.matrix-cell.playhead {
+  outline: 2px solid var(--playhead);
+  outline-offset: -1px;
+}
+
+.matrix-step-labels {
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  font-size: 0.6em;
+  color: var(--fg-device-dim);
+  margin-top: -6px;
+  margin-bottom: 8px;
+}
+
+.track-summary {
+  font-family: var(--font-frame);
+  color: var(--fg-device-dim);
+  font-size: 0.85em;
+  line-height: 1.6;
+  margin: 12px 0 20px;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
