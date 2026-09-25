@@ -1,0 +1,44 @@
+{
+  "appTitle": "Krachwerk",
+  "seedScreen": {
+    "heading": "시드 하나로 전자음악을 만들어요",
+    "subheading": "같은 시드는 언제 열어도 항상 같은 트랙이에요",
+    "inputLabel": "시드",
+    "inputPlaceholder": "숫자나 문자열을 입력해보세요",
+    "randomButton": "무작위로 만들기",
+    "traitsHeading": "성향을 골라보세요 (선택)",
+    "generateButton": "생성하기"
+  },
+  "traits": {
+    "bassEmphasis": "베이스 강조",
+    "unusualTimbre": "특이한 음색 위주",
+    "melodyMinimal": "미니멀한 멜로디",
+    "melodyElaborate": "화려한 멜로디"
+  },
+  "resultScreen": {
+    "generatedMessage": "생성했어요",
+    "play": "재생하기",
+    "pause": "정지하기",
+    "download": "다운로드하기",
+    "copyLink": "공유 링크 만들기",
+    "linkCopied": "링크를 복사했어요",
+    "summaryHeading": "이 트랙의 특징",
+    "summaryTempo": "템포 {tempo} BPM",
+    "summaryScale": "스케일 {scale}",
+    "summaryVoices": "베이스 {bass}, 리드 {lead}",
+    "editPattern": "패턴 보기/편집하기",
+    "newSeed": "다른 시드로 돌아가기"
+  },
+  "matrix": {
+    "drumTab": "DRUM",
+    "melodyTab": "MELO",
+    "seedLabel": "SEED",
+    "shuffle": "SHUFFLE",
+    "share": "SHARE",
+    "reset": "RESET",
+    "linkCopied": "패턴 링크를 복사했어요"
+  },
+  "language": {
+    "toggle": "EN"
+  }
+}

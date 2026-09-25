@@ -1,0 +1,44 @@
+{
+  "appTitle": "Krachwerk",
+  "seedScreen": {
+    "heading": "Make electronic music from one seed",
+    "subheading": "The same seed always plays the same track",
+    "inputLabel": "Seed",
+    "inputPlaceholder": "Type any number or string",
+    "randomButton": "Generate a random seed",
+    "traitsHeading": "Pick a mood (optional)",
+    "generateButton": "Generate track"
+  },
+  "traits": {
+    "bassEmphasis": "Bass emphasis",
+    "unusualTimbre": "Unusual timbre",
+    "melodyMinimal": "Minimal melody",
+    "melodyElaborate": "Elaborate melody"
+  },
+  "resultScreen": {
+    "generatedMessage": "Generated",
+    "play": "Play",
+    "pause": "Pause",
+    "download": "Download",
+    "copyLink": "Create share link",
+    "linkCopied": "Copied the link",
+    "summaryHeading": "About this track",
+    "summaryTempo": "Tempo {tempo} BPM",
+    "summaryScale": "Scale {scale}",
+    "summaryVoices": "Bass {bass}, lead {lead}",
+    "editPattern": "View / edit pattern",
+    "newSeed": "Back to seed screen"
+  },
+  "matrix": {
+    "drumTab": "DRUM",
+    "melodyTab": "MELO",
+    "seedLabel": "SEED",
+    "shuffle": "SHUFFLE",
+    "share": "SHARE",
+    "reset": "RESET",
+    "linkCopied": "Copied the pattern link"
+  },
+  "language": {
+    "toggle": "KO"
+  }
+}
