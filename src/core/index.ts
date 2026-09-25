@@ -5,5 +5,8 @@ export * from "./pattern";
 export * from "./traits";
 export * from "./patternOverride";
 export * from "./crosshairControl";
+export * from "./samples";
+export * from "./track";
+export * from "./arrangement";
 export * from "./audioEngine";
 export * from "./wav";

@@ -10,10 +10,10 @@
 | Token | Value | Usage |
 |---|---|---|
 | `--bg-device` | `#0d1117` | 디바이스(생성기) 배경 |
-| `--fg-device` | `#39d353` | 디바이스 전경, 활성 셀 (메인 네온그린) |
-| `--fg-device-dim` | `#3fb950` | 비활성 셀, 보조선 |
-| `--bg-ambient-a` | `#fafaf8` | 바깥 배경 크로스페이드 색상 A |
-| `--bg-ambient-b` | `#39d353` | 바깥 배경 크로스페이드 색상 B |
+| `--fg-device` | `#75fb4c` | 디바이스 전경, 활성 셀 (메인 네온그린) |
+| `--fg-device-dim` | `#5bc43b` | 비활성 셀, 보조선 |
+| `--bg-ambient-a` | `#fafaf8` | 바깥 배경 색상 A |
+| `--bg-ambient-b` | `#75fb4c` | 바깥 배경 색상 B |
 | `--accent-blue` | `#58a6ff` | 링크, hover/focus, 강조 텍스트 (배경 애니메이션에는 쓰지 않는다) |
 | `--panel` | `#21262d` | 디바이스 안 패널 구분선, 버튼 배경 |
 | `--playhead` | `#3a3a3a` | 재생 위치 표시 바 |
@@ -23,7 +23,7 @@
 `--ref-cyan #00d4e8`, `--ref-magenta #ff0090`, `--ref-gold #d29922`,
 `--ref-kakao-yellow #FEE500`(마케팅 소재 금지, UI 강조용만), `--ref-muted-1 #8b949e`, `--ref-muted-2 #6e7681`.
 
-배경 크로스페이드는 항상 `--bg-ambient-a` ↔ `--bg-ambient-b` 2색 순환만 쓴다. 파란색은 3순위 액센트로만
+배경 전환은 항상 `--bg-ambient-a` ↔ `--bg-ambient-b` 2색 순환만 쓴다. 파란색은 3순위 액센트로만
 쓰고 배경 순환에 넣지 않는다.
 
 ## Typography
@@ -36,10 +36,10 @@
 
 ## Motion
 
-바깥 배경은 10초 주기(5초 유지, 1초 미만 크로스페이드, 5초 유지, 다시 크로스페이드)로
-`--bg-ambient-a`와 `--bg-ambient-b` 사이를 오간다. 급격한 점멸이 아니라 부드러운 크로스페이드로
-구현해 광과민성 문제를 피하고, `prefers-reduced-motion: reduce`에서는 애니메이션을 끄고
-`--bg-ambient-a` 고정 배경만 보여준다.
+바깥 배경은 10초 주기로 `--bg-ambient-a`와 `--bg-ambient-b` 사이를 오간다. 페이드 없이
+`step-end`로 5초마다 딱 끊어서 바꾼다(기계가 스위치를 치는 느낌). 전환 주기가 0.1Hz라
+광과민성 기준(3Hz)과는 거리가 멀지만, `prefers-reduced-motion: reduce`에서는 애니메이션을
+끄고 `--bg-ambient-a` 고정 배경만 보여준다.
 
 ## Tone
 

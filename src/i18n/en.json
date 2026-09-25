@@ -26,6 +26,13 @@
     "summaryTempo": "Tempo {tempo} BPM",
     "summaryScale": "Scale {scale}",
     "summaryVoices": "Bass {bass}, lead {lead}",
+    "summaryLength": "Length {length}, {sections} sections",
+    "summaryStructure": "Structure {structure}",
+    "rendering": "Building",
+    "seek": "Playback position",
+    "renderFailed": "This browser could not build the track. {reason}",
+    "exporting": "Exporting",
+    "previewMode": "While editing you hear one bar on repeat",
     "editPattern": "View / edit pattern",
     "liveControl": "Live control",
     "newSeed": "Back to seed screen"

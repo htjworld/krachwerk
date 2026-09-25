@@ -35,7 +35,7 @@ export function MatrixEditor({ pattern, override, onOverrideChange, onShuffle, o
       return;
     }
     const tick = () => {
-      const elapsed = player.getElapsedSeconds();
+      const elapsed = player.getPosition();
       const loopDuration = loopDurationSeconds(tempo);
       const stepDuration = secondsPerStep(tempo);
       const position = ((elapsed % loopDuration) + loopDuration) % loopDuration;

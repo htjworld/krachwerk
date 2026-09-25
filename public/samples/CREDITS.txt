@@ -1,0 +1,34 @@
+Krachwerk 샘플 출처 / Sample credits
+====================================
+
+이 폴더의 모든 오디오 파일은 CC0 1.0 (퍼블릭 도메인 기증)이다.
+All audio in this folder is CC0 1.0 (public domain dedication).
+
+
+808/  — Roland TR-808 Rhythm Composer
+  원본: Michael Fischer (Technopolis), "TR-808 Sound Sample Set 1.0.0" (1994)
+  배포: https://github.com/tidalcycles/sounds-tr808-fischer  (CC0-1.0)
+  가공: 뒤쪽 무음 구간만 잘라냄. 44.1kHz / 16bit / mono 유지.
+
+  kick-tight  BD0000    kick-mid   BD2550    kick-long  BD7575
+  snare       SD0050    snare-tight SD5000   clap       CP
+  hat-closed  CH        hat-open   OH25      hat-open-long OH75
+  rim         RS        clave      CL        cowbell    CB
+  maraca      MA        tom-low    LT50      tom-mid    MT50
+  tom-high    HT50      conga-high HC50      cymbal     CY0050
+
+
+metal/ — 금속·기계 타악기 (Kraftwerk의 "Metall auf Metall" 계열 소스)
+  원본: Versilian Community Sample Library (VCSL), Sam Gossner 외
+  배포: https://github.com/sgossner/VCSL  (CC0-1.0)
+  가공: 모노 다운믹스, 44.1kHz / 16bit, 최대 2초로 자르고 무음 제거.
+
+  anvil-1     Anvil_Hit1_v3          anvil-2     Anvil_Hit2_v2
+  brake-1     BrakeDrum1_Hammer_v3   brake-2     BrakeDrum2_Hammer3_v2
+  logdrum-lo  LogDrumLo_MedM_v2      logdrum-hi  LogDrumHi_MedM_v2
+  slapstick   slapstick_rr1          ratchet     Ratchet1_Crank_rr1
+  agogo-hi    Agogo_High_v2          agogo-lo    Agogo_Low_v1
+
+
+CC0라서 표기 의무는 없지만, 원 제작자에 대한 예의로 남겨둔다.
+Attribution is not required under CC0; it is kept here out of courtesy.

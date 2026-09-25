@@ -1,9 +1,9 @@
 :root {
   --bg-device: #0d1117;
-  --fg-device: #39d353;
-  --fg-device-dim: #3fb950;
+  --fg-device: #75fb4c;
+  --fg-device-dim: #5bc43b;
   --bg-ambient-a: #fafaf8;
-  --bg-ambient-b: #39d353;
+  --bg-ambient-b: #75fb4c;
   --accent-blue: #58a6ff;
   --panel: #21262d;
   --playhead: #3a3a3a;
@@ -39,20 +39,16 @@ button {
   align-items: center;
   justify-content: center;
   padding: 24px 16px;
-  animation: krachwerk-ambient 10s ease-in-out infinite;
+  /* step-end라 크로스페이드 없이 5초마다 딱딱 끊어서 바뀐다. */
+  animation: krachwerk-ambient 10s step-end infinite;
 }
 
 @keyframes krachwerk-ambient {
-  0%,
-  45% {
+  0% {
     background-color: var(--bg-ambient-a);
   }
-  50%,
-  95% {
+  50% {
     background-color: var(--bg-ambient-b);
-  }
-  100% {
-    background-color: var(--bg-ambient-a);
   }
 }
 
@@ -94,6 +90,14 @@ button {
   color: var(--fg-device-dim);
   margin: 0 0 20px;
   font-size: 0.9em;
+}
+
+.device-error {
+  font-family: var(--font-frame);
+  color: var(--ref-magenta, #ff0090);
+  margin: 0 0 16px;
+  font-size: 0.85em;
+  line-height: 1.5;
 }
 
 .device-label {
@@ -218,6 +222,75 @@ button {
   font-size: 0.85em;
   line-height: 1.6;
   margin: 12px 0 20px;
+}
+
+.track-progress {
+  margin: 0 0 18px;
+}
+
+.track-progress-bar {
+  position: relative;
+  height: 14px;
+  background: var(--panel);
+}
+
+.track-progress-bar:focus-within {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+.track-progress-fill {
+  height: 100%;
+  background: var(--fg-device);
+}
+
+/* 실제 스크러버. 눈에 보이는 건 위의 바이고, 이 input이 그 위를 덮어서 클릭, 드래그,
+   키보드 조작을 전부 네이티브로 처리한다. 터치 대상은 바보다 위아래로 더 넓게 잡는다. */
+.track-progress-input {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -13px;
+  bottom: -13px;
+  width: 100%;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+
+.track-progress-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 40px;
+}
+
+.track-progress-input::-moz-range-thumb {
+  width: 18px;
+  height: 40px;
+  border: 0;
+}
+
+/* 섹션 경계. 어디서 구성이 바뀌는지 바 위에 그대로 찍어둔다. */
+.track-progress-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--bg-device);
+}
+
+.track-progress-labels {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-device);
+  font-size: 0.75em;
+  color: var(--fg-device-dim);
+  margin-top: 6px;
 }
 
 .crosshair-icons {
