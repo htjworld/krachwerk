@@ -48,18 +48,20 @@ export function generatePattern(seedInput: string): Pattern {
     leadVoice = pick(rng, VOICES).id;
   }
 
+  // degree는 on/off와 무관하게 매 스텝 채운다. 매트릭스 에디터에서 꺼진 스텝을 다시 켜도
+  // 시드가 정해둔 음정 그대로 재생되도록 하기 위해서다.
   const bass = emptySteps();
   for (let i = 0; i < STEP_COUNT; i++) {
+    const degree = pick(rng, [-1, 0, 0, 0, 2]);
     const isEvenStep = i % 2 === 0;
     const on = isEvenStep || rng() < 0.15;
-    const degree = on ? pick(rng, [-1, 0, 0, 0, 2]) : 0;
     bass[i] = { on, degree };
   }
 
   const lead = emptySteps();
   for (let i = 0; i < STEP_COUNT; i++) {
+    const degree = Math.floor(rng() * 10) - 2;
     const on = rng() < 0.5;
-    const degree = on ? Math.floor(rng() * 10) - 2 : 0;
     lead[i] = { on, degree };
   }
 
