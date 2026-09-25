@@ -1,0 +1,26 @@
+export interface Scale {
+  id: string;
+  name: string;
+  rootMidi: number;
+  // 루트로부터의 반음 간격 (한 옥타브 안)
+  intervals: number[];
+}
+
+export const SCALES: readonly Scale[] = [
+  { id: "aMinor", name: "A Minor", rootMidi: 57, intervals: [0, 2, 3, 5, 7, 8, 10] },
+  { id: "dDorian", name: "D Dorian", rootMidi: 50, intervals: [0, 2, 3, 5, 7, 9, 10] },
+  { id: "gMinorPentatonic", name: "G Minor Pentatonic", rootMidi: 55, intervals: [0, 3, 5, 7, 10] },
+  { id: "ePhrygian", name: "E Phrygian", rootMidi: 52, intervals: [0, 1, 3, 5, 7, 8, 10] },
+];
+
+// scaleDegree: 스케일 내 임의의 인덱스(음수/양수 모두 허용, 옥타브를 넘나든다)를 MIDI 노트로 변환.
+export function degreeToMidi(scale: Scale, degree: number): number {
+  const len = scale.intervals.length;
+  const octave = Math.floor(degree / len);
+  const index = ((degree % len) + len) % len;
+  return scale.rootMidi + octave * 12 + scale.intervals[index];
+}
+
+export function midiToFrequency(midi: number): number {
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
