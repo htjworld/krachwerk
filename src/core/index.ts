@@ -4,5 +4,6 @@ export * from "./voices";
 export * from "./pattern";
 export * from "./traits";
 export * from "./patternOverride";
+export * from "./crosshairControl";
 export * from "./audioEngine";
 export * from "./wav";

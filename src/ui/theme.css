@@ -220,6 +220,47 @@ button {
   margin: 12px 0 20px;
 }
 
+.crosshair-icons {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 16px;
+}
+
+.crosshair-icon {
+  width: 28px;
+  height: 44px;
+  background: var(--fg-device);
+  border-radius: 3px;
+}
+
+.crosshair-area {
+  position: relative;
+  height: 140px;
+  background: var(--panel);
+  border: 1px solid var(--fg-device-dim);
+  border-radius: 6px;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.crosshair-line-v {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #ffffff;
+  transform: translateX(-0.5px);
+}
+
+.crosshair-line-h {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #ffffff;
+  transform: translateY(-0.5px);
+}
+
 .button-row {
   display: flex;
   flex-wrap: wrap;

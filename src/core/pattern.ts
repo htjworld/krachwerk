@@ -27,6 +27,12 @@ function emptySteps(): StepCell[] {
   return Array.from({ length: STEP_COUNT }, () => ({ on: false, degree: 0 }));
 }
 
+// 크로스헤어 컨트롤(4.5)의 텍스처 레이어 활성 여부. seedHash의 별도 비트에서 뽑아
+// generatePattern의 rng 순서와 완전히 독립적으로 결정한다.
+export function isTextureActive(pattern: Pick<Pattern, "seedHash">): boolean {
+  return ((pattern.seedHash >>> 3) & 1) === 1;
+}
+
 export function fixedDrumLayer(): { kick: boolean[]; hihat: boolean[] } {
   const kick = Array.from({ length: STEP_COUNT }, (_, i) => KICK_STEPS.includes(i));
   const hihat = Array.from({ length: STEP_COUNT }, () => true);

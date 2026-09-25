@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { renderLoopBuffer, type Pattern } from "../core";
-import type { PatternOverride } from "../core";
+import type { PatternOverride, CrosshairControl } from "../core";
 
 export interface Player {
   isPlaying: boolean;
@@ -11,7 +11,11 @@ export interface Player {
 
 // 한 루프 버퍼를 렌더링해서 loop=true로 반복 재생한다. iOS는 사용자 제스처 안에서
 // AudioContext를 시작/재개해야 하므로 toggle()이 그 역할을 겸한다.
-export function usePlayer(pattern: Pattern, override: PatternOverride | null): Player {
+export function usePlayer(
+  pattern: Pattern,
+  override: PatternOverride | null,
+  liveControls: CrosshairControl | null = null
+): Player {
   const ctxRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
   const startedAtRef = useRef<number>(0);
@@ -36,7 +40,7 @@ export function usePlayer(pattern: Pattern, override: PatternOverride | null): P
     if (ctx.state === "suspended") await ctx.resume();
 
     setIsRendering(true);
-    const buffer = await renderLoopBuffer(pattern, override);
+    const buffer = await renderLoopBuffer(pattern, override, liveControls);
     setIsRendering(false);
 
     stopSource();
@@ -47,7 +51,7 @@ export function usePlayer(pattern: Pattern, override: PatternOverride | null): P
     source.start();
     sourceRef.current = source;
     startedAtRef.current = ctx.currentTime;
-  }, [pattern, override, stopSource]);
+  }, [pattern, override, liveControls, stopSource]);
 
   const toggle = useCallback(() => {
     if (isPlaying) {
@@ -59,12 +63,13 @@ export function usePlayer(pattern: Pattern, override: PatternOverride | null): P
     }
   }, [isPlaying, playLoop, stopSource]);
 
-  // 매트릭스 편집으로 pattern/override가 바뀌면, 재생 중일 때만 즉시 다시 렌더링해서 이어붙인다.
+  // 매트릭스 편집이나 크로스헤어 조작으로 pattern/override/liveControls가 바뀌면,
+  // 재생 중일 때만 즉시 다시 렌더링해서 이어붙인다.
   const seedHash = pattern.seedHash;
   useEffect(() => {
     if (isPlaying) void playLoop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seedHash, override]);
+  }, [seedHash, override, liveControls]);
 
   useEffect(() => stopSource, [stopSource]);
 

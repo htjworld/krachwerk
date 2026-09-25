@@ -27,6 +27,7 @@
     "summaryScale": "스케일 {scale}",
     "summaryVoices": "베이스 {bass}, 리드 {lead}",
     "editPattern": "패턴 보기/편집하기",
+    "liveControl": "라이브 컨트롤",
     "newSeed": "다른 시드로 돌아가기"
   },
   "matrix": {

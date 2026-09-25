@@ -22,37 +22,47 @@ const BASE_PATH = import.meta.env.BASE_URL; // 예: "/krachwerk/"
 export interface RouteState {
   seed: string | null;
   pattern: string | null;
+  crosshair: string | null;
+}
+
+export interface RouteParams {
+  pattern?: string | null;
+  crosshair?: string | null;
 }
 
 export function readRoute(): RouteState {
-  if (typeof window === "undefined") return { seed: null, pattern: null };
+  if (typeof window === "undefined") return { seed: null, pattern: null, crosshair: null };
   const { pathname, search } = window.location;
   const trimmedBase = BASE_PATH.endsWith("/") ? BASE_PATH.slice(0, -1) : BASE_PATH;
   let rest = pathname.startsWith(trimmedBase) ? pathname.slice(trimmedBase.length) : pathname;
   rest = rest.replace(/^\/+/, "");
   const seed = rest.length > 0 ? decodeURIComponent(rest) : null;
-  const pattern = new URLSearchParams(search).get("pattern");
-  return { seed, pattern };
+  const params = new URLSearchParams(search);
+  return { seed, pattern: params.get("pattern"), crosshair: params.get("crosshair") };
 }
 
-export function buildSeedUrl(seed: string, pattern?: string | null): string {
+function buildQuery(params?: RouteParams): string {
+  const query = new URLSearchParams();
+  if (params?.pattern) query.set("pattern", params.pattern);
+  if (params?.crosshair) query.set("crosshair", params.crosshair);
+  const str = query.toString();
+  return str ? `?${str}` : "";
+}
+
+export function buildSeedUrl(seed: string, params?: RouteParams): string {
   const origin = window.location.origin;
   const base = BASE_PATH.endsWith("/") ? BASE_PATH : BASE_PATH + "/";
-  const path = `${origin}${base}${encodeURIComponent(seed)}`;
-  return pattern ? `${path}?pattern=${pattern}` : path;
+  return `${origin}${base}${encodeURIComponent(seed)}${buildQuery(params)}`;
 }
 
-export function pushRoute(seed: string, pattern?: string | null): void {
+export function pushRoute(seed: string, params?: RouteParams): void {
   const base = BASE_PATH.endsWith("/") ? BASE_PATH : BASE_PATH + "/";
-  const path = `${base}${encodeURIComponent(seed)}`;
-  const query = pattern ? `?pattern=${pattern}` : "";
-  window.history.pushState(null, "", path + query);
+  window.history.pushState(null, "", `${base}${encodeURIComponent(seed)}${buildQuery(params)}`);
 }
 
-// 매트릭스 에디터에서 셀을 토글할 때는 새 히스토리 항목을 쌓지 않고 현재 URL만 갱신한다.
-export function replaceRoute(seed: string, pattern?: string | null): void {
+// 매트릭스 에디터나 크로스헤어 조작처럼 값을 계속 바꿀 때는 새 히스토리 항목을 쌓지 않고
+// 현재 URL만 갱신한다.
+export function replaceRoute(seed: string, params?: RouteParams): void {
   const base = BASE_PATH.endsWith("/") ? BASE_PATH : BASE_PATH + "/";
-  const path = `${base}${encodeURIComponent(seed)}`;
-  const query = pattern ? `?pattern=${pattern}` : "";
-  window.history.replaceState(null, "", path + query);
+  window.history.replaceState(null, "", `${base}${encodeURIComponent(seed)}${buildQuery(params)}`);
 }

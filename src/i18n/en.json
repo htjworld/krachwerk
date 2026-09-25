@@ -27,6 +27,7 @@
     "summaryScale": "Scale {scale}",
     "summaryVoices": "Bass {bass}, lead {lead}",
     "editPattern": "View / edit pattern",
+    "liveControl": "Live control",
     "newSeed": "Back to seed screen"
   },
   "matrix": {

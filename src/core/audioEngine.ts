@@ -1,7 +1,8 @@
 import { degreeToMidi, midiToFrequency } from "./scales";
 import { mulberry32 } from "./prng";
-import { STEP_COUNT, type Pattern } from "./pattern";
+import { STEP_COUNT, isTextureActive, type Pattern } from "./pattern";
 import { resolveLayers, type PatternOverride } from "./patternOverride";
+import type { CrosshairControl } from "./crosshairControl";
 import type { VoiceId } from "./voices";
 
 export function secondsPerStep(tempo: number): number {
@@ -175,6 +176,34 @@ function triggerVoice(
   }
 }
 
+// 4.5 크로스헤어의 텍스처 레이어: 스케일 루트를 한 옥타브 아래로 깔아주는 지속음 패드.
+// 시드에서 활성으로 뽑힌 트랙에서만 재생된다.
+function scheduleTexturePad(ctx: BaseAudioContext, destination: AudioNode, pattern: Pattern, loopDuration: number): void {
+  const octave = pattern.scale.intervals.length;
+  const freq = midiToFrequency(degreeToMidi(pattern.scale, -octave));
+  const release = Math.min(0.4, loopDuration / 4);
+
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0, 0);
+  gain.gain.linearRampToValueAtTime(0.06, release);
+  gain.gain.setValueAtTime(0.06, loopDuration - release);
+  gain.gain.linearRampToValueAtTime(0, loopDuration);
+  gain.connect(destination);
+
+  const osc1 = ctx.createOscillator();
+  osc1.type = "triangle";
+  osc1.frequency.setValueAtTime(freq, 0);
+  const osc2 = ctx.createOscillator();
+  osc2.type = "sine";
+  osc2.frequency.setValueAtTime(freq * 2.01, 0);
+  osc1.connect(gain);
+  osc2.connect(gain);
+  osc1.start(0);
+  osc1.stop(loopDuration);
+  osc2.start(0);
+  osc2.stop(loopDuration);
+}
+
 function scheduleLoop(
   ctx: BaseAudioContext,
   destination: AudioNode,
@@ -182,9 +211,10 @@ function scheduleLoop(
   layers: ReturnType<typeof resolveLayers>,
   startTime: number,
   drumNoise: AudioBuffer,
-  voiceNoise: AudioBuffer
+  voiceNoise: AudioBuffer,
+  tempo: number
 ): void {
-  const stepDur = secondsPerStep(pattern.tempo);
+  const stepDur = secondsPerStep(tempo);
   const octave = pattern.scale.intervals.length;
   for (let i = 0; i < STEP_COUNT; i++) {
     const t = startTime + i * stepDur;
@@ -201,20 +231,38 @@ function scheduleLoop(
   }
 }
 
+// filterCutoff(0..1)를 로우패스 컷오프 주파수(Hz)로 매핑한다. 1이면 가청 대역 위라 사실상
+// 필터가 안 걸린 것처럼 들린다.
+function cutoffToFrequency(cutoff: number): number {
+  return 300 * Math.pow(18000 / 300, cutoff);
+}
+
 // 한 마디(16스텝) 분량만 오프라인으로 렌더링한다. 재생은 이 버퍼를 loop=true로 반복하고,
 // 다운로드는 이 버퍼의 PCM을 여러 번 이어붙여서(wav.ts) 만든다.
-export async function renderLoopBuffer(pattern: Pattern, override?: PatternOverride | null): Promise<AudioBuffer> {
-  const duration = loopDurationSeconds(pattern.tempo);
+export async function renderLoopBuffer(
+  pattern: Pattern,
+  override?: PatternOverride | null,
+  liveControls?: CrosshairControl | null
+): Promise<AudioBuffer> {
+  const tempo = liveControls?.tempo ?? pattern.tempo;
+  const duration = loopDurationSeconds(tempo);
   const sampleRate = 44100;
   const ctx = new OfflineAudioContext(2, Math.ceil(duration * sampleRate), sampleRate);
+
+  const tone = ctx.createBiquadFilter();
+  tone.type = "lowpass";
+  tone.frequency.value = cutoffToFrequency(liveControls?.filterCutoff ?? 1);
+  tone.connect(ctx.destination);
+
   const master = ctx.createGain();
   master.gain.value = 0.8;
-  master.connect(ctx.destination);
+  master.connect(tone);
 
   const drumNoise = makeNoiseBuffer(ctx, FIXED_DRUM_NOISE_SEED, 0.05);
   const voiceNoise = makeNoiseBuffer(ctx, pattern.seedHash, 0.06);
   const layers = resolveLayers(pattern, override);
-  scheduleLoop(ctx, master, pattern, layers, 0, drumNoise, voiceNoise);
+  scheduleLoop(ctx, master, pattern, layers, 0, drumNoise, voiceNoise, tempo);
+  if (isTextureActive(pattern)) scheduleTexturePad(ctx, master, pattern, duration);
 
   return ctx.startRendering();
 }

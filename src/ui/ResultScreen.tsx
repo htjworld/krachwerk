@@ -1,13 +1,24 @@
 import { useState } from "react";
 import { useI18n } from "../i18n/i18n";
-import { renderLoopBuffer, encodeWav, loopDurationSeconds, type Pattern, type PatternOverride } from "../core";
+import {
+  renderLoopBuffer,
+  encodeWav,
+  loopDurationSeconds,
+  effectiveTempo,
+  type Pattern,
+  type PatternOverride,
+  type CrosshairControl,
+} from "../core";
 import { usePlayer } from "./usePlayer";
 import { MatrixEditor } from "./MatrixEditor";
+import { CrosshairPanel } from "./CrosshairPanel";
 
 interface Props {
   pattern: Pattern;
   override: PatternOverride | null;
   onOverrideChange: (override: PatternOverride | null) => void;
+  crosshair: CrosshairControl | null;
+  onCrosshairChange: (control: CrosshairControl | null) => void;
   onShuffle: () => void;
   onShare: () => void;
   onBackToSeed: () => void;
@@ -15,15 +26,26 @@ interface Props {
 
 const TARGET_DOWNLOAD_SECONDS = 60;
 
-export function ResultScreen({ pattern, override, onOverrideChange, onShuffle, onShare, onBackToSeed }: Props) {
+export function ResultScreen({
+  pattern,
+  override,
+  onOverrideChange,
+  crosshair,
+  onCrosshairChange,
+  onShuffle,
+  onShare,
+  onBackToSeed,
+}: Props) {
   const { t, lang, setLang } = useI18n();
-  const player = usePlayer(pattern, override);
+  const player = usePlayer(pattern, override, crosshair);
   const [showMatrix, setShowMatrix] = useState(false);
+  const [showCrosshair, setShowCrosshair] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const tempo = effectiveTempo(pattern, crosshair);
 
   const handleDownload = async () => {
-    const buffer = await renderLoopBuffer(pattern, override);
-    const repeats = Math.max(1, Math.round(TARGET_DOWNLOAD_SECONDS / loopDurationSeconds(pattern.tempo)));
+    const buffer = await renderLoopBuffer(pattern, override, crosshair);
+    const repeats = Math.max(1, Math.round(TARGET_DOWNLOAD_SECONDS / loopDurationSeconds(tempo)));
     const blob = encodeWav(buffer, repeats);
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -52,7 +74,7 @@ export function ResultScreen({ pattern, override, onOverrideChange, onShuffle, o
         <h1 className="device-heading">{t("resultScreen.generatedMessage")}</h1>
 
         <p className="track-summary">
-          {t("resultScreen.summaryTempo", { tempo: pattern.tempo })}
+          {t("resultScreen.summaryTempo", { tempo })}
           <br />
           {t("resultScreen.summaryScale", { scale: pattern.scale.name })}
           <br />
@@ -76,6 +98,9 @@ export function ResultScreen({ pattern, override, onOverrideChange, onShuffle, o
           <button type="button" className="device-text-button" onClick={() => setShowMatrix((v) => !v)}>
             {t("resultScreen.editPattern")}
           </button>
+          <button type="button" className="device-text-button" onClick={() => setShowCrosshair((v) => !v)}>
+            {t("resultScreen.liveControl")}
+          </button>
           <button type="button" className="device-text-button" onClick={onBackToSeed}>
             {t("resultScreen.newSeed")}
           </button>
@@ -90,8 +115,11 @@ export function ResultScreen({ pattern, override, onOverrideChange, onShuffle, o
           onShuffle={onShuffle}
           onShare={handleShare}
           player={player}
+          tempo={tempo}
         />
       )}
+
+      {showCrosshair && <CrosshairPanel pattern={pattern} control={crosshair} onChange={onCrosshairChange} />}
     </>
   );
 }

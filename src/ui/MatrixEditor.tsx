@@ -18,11 +18,12 @@ interface Props {
   onShuffle: () => void;
   onShare: () => void;
   player: Player;
+  tempo: number;
 }
 
 const STEP_LABEL_POSITIONS = [3, 7, 11, 15];
 
-export function MatrixEditor({ pattern, override, onOverrideChange, onShuffle, onShare, player }: Props) {
+export function MatrixEditor({ pattern, override, onOverrideChange, onShuffle, onShare, player, tempo }: Props) {
   const { t } = useI18n();
   const [tab, setTab] = useState<"drum" | "melo">("drum");
   const [playheadStep, setPlayheadStep] = useState<number | null>(null);
@@ -35,15 +36,15 @@ export function MatrixEditor({ pattern, override, onOverrideChange, onShuffle, o
     }
     const tick = () => {
       const elapsed = player.getElapsedSeconds();
-      const loopDuration = loopDurationSeconds(pattern.tempo);
-      const stepDuration = secondsPerStep(pattern.tempo);
+      const loopDuration = loopDurationSeconds(tempo);
+      const stepDuration = secondsPerStep(tempo);
       const position = ((elapsed % loopDuration) + loopDuration) % loopDuration;
       setPlayheadStep(Math.floor(position / stepDuration));
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [player, pattern.tempo]);
+  }, [player, tempo]);
 
   const resolved = resolveLayers(pattern, override);
   const cells = tab === "drum" ? resolved.kick : resolved.lead.map((c) => c.on);
