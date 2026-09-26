@@ -5,6 +5,7 @@ import {
   computeBass,
   computeRiff,
   computeScale,
+  familyDrumHit,
   fourFloorGhostStep,
   fourFloorMask,
   halfBar8FillSteps,
@@ -232,5 +233,17 @@ describe("metropolis 조성·리프·베이스 (§16.4)", () => {
   it("pulse2Steps는 비트7에 따라 [0,8] 또는 [2,10]이다", () => {
     expect(pulse2Steps(0)).toEqual([0, 8]);
     expect(pulse2Steps(0b10000000)).toEqual([2, 10]);
+  });
+
+  it("familyDrumHit: metropolis의 fourFloor는 항상 0·4·8·12뿐이다 (compute처럼 픽업 스텝15가 없다)", () => {
+    // 픽업 주기가 걸리는 조합(비트6=1 → 2마디 주기, barIndex 홀수 → 마지막 마디)을 일부러
+    // 골라도, compute였다면 스텝15가 켜졌을 자리인데 metropolis는 그대로 0·4·8·12뿐이어야 한다.
+    const genome = fakeGenome({ drumVariant: 0b01000000 });
+    const metro = familyDrumHit("fourFloor", genome, 1, "metropolis")!;
+    expect(metro.mask).toEqual(metropolisFourFloorKick());
+    expect(metro.mask[15]).toBe(false);
+
+    const comp = familyDrumHit("fourFloor", genome, 1, "compute")!;
+    expect(comp.mask[15]).toBe(true); // compute는 같은 게놈·마디에서 픽업이 걸린다
   });
 });

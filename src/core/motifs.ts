@@ -326,12 +326,17 @@ export function pulse2Steps(g8: number): [number, number] {
 export function familyDrumHit(
   family: DrumFamily,
   genome: Genome,
-  barIndex: number
+  barIndex: number,
+  blueprintId: BlueprintId
 ): { role: "kick" | "lowDrum" | "tick"; mask: boolean[] } | null {
   switch (family) {
     case "lowSeq16":
       return { role: "lowDrum", mask: lowSeq16Mask(genome.drumVariant, barIndex % 4) };
     case "fourFloor":
+      // metropolis의 메인 킥은 legacy처럼 선택 스텝이 없다 — 항상 0·4·8·12뿐이다(§16.4
+      // motifs.ts 표 metropolis 열). 픽업 스텝15/고스트 흔들림은 compute B계열 전용이다.
+      if (blueprintId === "metropolis") return { role: "kick", mask: metropolisFourFloorKick() };
+      return { role: "kick", mask: fourFloorMask(genome.drumVariant, barIndex) };
     case "fourFloorCut":
       return { role: "kick", mask: fourFloorMask(genome.drumVariant, barIndex) };
     case "burst16":

@@ -26,6 +26,7 @@ import {
   familyDrumHit,
   fourFloorGhostStep,
   metropolisBass,
+  metropolisHarmonyShifts,
   metropolisScale,
   metropolisSeq,
   metropolisSeqAccent,
@@ -754,7 +755,7 @@ export function scheduleBar(
   const isCompute = pattern.blueprintId === "compute";
   const isMetropolis = pattern.blueprintId === "metropolis";
   const familyHit =
-    isCompute || isMetropolis ? familyDrumHit(section.drumFamily, pattern.genome, barIndex) : null;
+    isCompute || isMetropolis ? familyDrumHit(section.drumFamily, pattern.genome, barIndex, pattern.blueprintId) : null;
   const octave = pattern.scale.intervals.length;
   const isLastBar = sectionBar === section.bars - 1;
   // legacy(§11 단계 2 이관분)는 fill 배열을 안 쓰고 옛 방식대로 매 필 마디마다 rng()로
@@ -769,7 +770,18 @@ export function scheduleBar(
   const shift = track.progression[Math.floor(barIndex / 4) % track.progression.length];
   // 홀수 16분 스텝을 swing×stepDur만큼 늦춘다(§11 단계 3, metropolis 측정 스윙).
   const at = (step: number) => barStart + step * stepDur + (step % 2 === 1 ? swing * stepDur : 0);
-  const semitones = (step: number) => semitoneShift(section, sectionBar, step);
+  // metropolis 화성 이동(§5.10/§16.4): 블루프린트 harmony의 semitones는 실제 반음 수가
+  // 아니라 자리 표시다(0=제자리, 1=metropolisHarmonyShifts()[0], 2=[1]) — 실제 이동 폭은
+  // 게놈 mode가 고른다. metropolis 섹션은 transpose를 안 쓰므로 semitoneShift의 반환값이
+  // 곧 그 표시값 그대로다.
+  const metropolisShifts = isMetropolis ? metropolisHarmonyShifts(pattern.genome) : null;
+  const semitones = (step: number) => {
+    const raw = semitoneShift(section, sectionBar, step);
+    if (!metropolisShifts) return raw;
+    if (raw === 1) return metropolisShifts[0];
+    if (raw === 2) return metropolisShifts[1];
+    return raw;
+  };
   const withShift = (freq: number, step: number) => freq * 2 ** (semitones(step) / 12);
 
   if (sectionBar === 0 && intensity > 0.28) {
