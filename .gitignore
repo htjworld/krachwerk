@@ -4,3 +4,6 @@ dist-ssr
 *.local
 .DS_Store
 tsconfig.tsbuildinfo
+
+# 로컬 전용 리서치 (추적 안 함)
+_research/
