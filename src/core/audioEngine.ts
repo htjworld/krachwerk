@@ -22,6 +22,7 @@ import {
 import { deriveTrack, type Track } from "./track";
 import { loadVoiceForCode, type VoiceLang } from "./voiceBank";
 import { loadSigSample, type SigSampleKind } from "./sigBank";
+import { loadSynthKit, type SynthKit } from "./drumSynth";
 
 export function secondsPerStep(tempo: number): number {
   return 60 / tempo / 4;
@@ -702,6 +703,9 @@ export interface Rig {
   /** 시그니처 사운드(§15.2 S2~S6). 곡 하나에 하나만 고른다 — sigSlots가 있는 블루프린트
    *  (compute/metropolis)만 채운다. */
   sigBuffer: AudioBuffer | null;
+  /** 합성 드럼 킷(§14.2 K, §15.3). compute="circuit"/metropolis="skyline". legacy는 null
+   *  (코어/uzu/simmons 샘플 킷을 그대로 쓴다). */
+  synthKit: SynthKit | null;
 }
 
 export function scheduleBar(
@@ -765,9 +769,11 @@ export function scheduleBar(
 
     if (familyHit) {
       // compute/metropolis: 드럼 계열이 킥/lowDrum/tick의 on-off를 정한다(§16.4). 소리는
-      // 지금은 전부 같은 킥 샘플을 재사용한다 — 역할별 음색은 §11 단계 6 청취 후 다듬는다.
+      // 합성 킷(circuit/skyline, §14.2 K)의 킥 원샷을 세 역할 다 재사용한다 — 역할별
+      // 음색은 §11 단계 6 청취 후 다듬는다.
       if (familyHit.mask[step]) {
-        drums.hit(familyHit.role, bank[track.kick], time, 0.9 + 0.1 * intensity);
+        const sample = rig.synthKit ? rig.synthKit.kick : bank[track.kick];
+        drums.hit(familyHit.role, sample, time, 0.9 + 0.1 * intensity);
         if (familyHit.role !== "tick") {
           const depth = 0.34 + 0.24 * (1 - intensity);
           mix.sidechain.gain.setValueAtTime(depth, time);
@@ -787,14 +793,16 @@ export function scheduleBar(
 
     if (cueActiveAtStep(section, "backbeat", sectionBar, step) && (step === 4 || step === 12)) {
       const double = fillKind === 3 && step === 12;
-      drums.hit("backbeat", bank[track.backbeat], time, double ? 0.85 : 0.7);
-      if (double) drums.hit("backbeat", bank[track.backbeat], at(14), 0.6);
+      // compute는 클랩 성향(§14.2 K), metropolis는 스네어 성향 — 합성 킷에도 그대로 따른다.
+      const backbeatSample = rig.synthKit ? (isCompute ? rig.synthKit.clap : rig.synthKit.snare) : bank[track.backbeat];
+      drums.hit("backbeat", backbeatSample, time, double ? 0.85 : 0.7);
+      if (double) drums.hit("backbeat", backbeatSample, at(14), 0.6);
     }
 
     const hatCue = cueActiveAtStep(section, "hat", sectionBar, step);
     if (hatCue && step < hatCutFrom && cueStepActive(hatCue, sectionBar, step)) {
       const level = (downbeat ? 0.55 : step % 2 === 0 ? 0.4 : 0.24) * accent;
-      drums.hit("hat", bank[track.hat], time, level, 0.95 + rng() * 0.12);
+      drums.hit("hat", rig.synthKit ? rig.synthKit.hat : bank[track.hat], time, level, 0.95 + rng() * 0.12);
     }
 
     if (cueActiveAtStep(section, "openHat", sectionBar, step) && step % 4 === 2) {
@@ -1052,6 +1060,14 @@ async function buildRig(
     else sigBuffer = await loadSigSample(ctx, kind as SigSampleKind, Math.floor(sigRng() * 7));
   }
 
+  // 합성 드럼 킷(§14.2 K): compute/metropolis는 legacy 샘플 대신 자기 킷으로 킥·백비트·햇을 낸다.
+  const synthKit =
+    pattern.blueprintId === "compute"
+      ? await loadSynthKit(ctx.sampleRate, "circuit", pattern.seedHash)
+      : pattern.blueprintId === "metropolis"
+        ? await loadSynthKit(ctx.sampleRate, "skyline", pattern.seedHash)
+        : null;
+
   const rig: Rig = {
     ctx,
     mix,
@@ -1076,6 +1092,7 @@ async function buildRig(
     motifBass,
     voiceBank,
     sigBuffer,
+    synthKit,
   };
 
   return { ctx, rig };
