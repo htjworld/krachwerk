@@ -1,7 +1,7 @@
 import { mulberry32, pick } from "./prng";
 import { STEP_COUNT, type Pattern, type StepCell } from "./pattern";
 import type { SampleId } from "./samples";
-import { TEMPLATE_COUNT } from "./arrangement";
+import { legacyDrumVariantFor, legacyPercSteps } from "./motifs";
 
 // generatePattern이 뽑는 것(템포, 스케일, 보이스, 16스텝 베이스/리드)은 시드의 정체성이자
 // 매트릭스 에디터의 편집 대상이라 손대지 않는다. 3분짜리 편곡에 더 필요한 재료
@@ -26,17 +26,17 @@ const METALS: SampleId[] = [
 ];
 
 export interface Track {
-  /** arrangement.ts의 템플릿 인덱스 */
-  template: number;
   kick: SampleId;
   backbeat: SampleId;
   shaker: SampleId;
   metalA: SampleId;
   metalB: SampleId;
-  /** 셰이커/퍼커션이 들어가는 16스텝 */
+  /** 셰이커/퍼커션이 들어가는 16스텝. §11 단계 5부터 게놈 drumVariant의 유클리드 패턴이다. */
   percSteps: boolean[];
-  /** 금속 타격음이 들어갈 후보 스텝 두 자리 */
+  /** 금속 타격음이 들어갈 후보 스텝 두 자리. 게놈 drumVariant에서 나온다(§16.4). */
   metalSteps: [number, number];
+  /** legacy 필 주기(마디). 게놈 drumVariant에서 나온다(§16.4) — 예전엔 8로 고정이었다. */
+  fillPeriodBars: 4 | 8;
   /** 베이스가 한 옥타브 위로 튀는 스텝 */
   bassOctave: boolean[];
   /** 벨로시티가 세지는 스텝 */
@@ -53,12 +53,12 @@ export interface Track {
 
 export function deriveTrack(pattern: Pattern): Track {
   const rng = mulberry32((pattern.seedHash ^ TRACK_SALT) >>> 0);
+  const drumVariant = legacyDrumVariantFor(pattern.genome.drumVariant);
 
   const metalA = pick(rng, METALS);
   let metalB = pick(rng, METALS);
   while (metalB === metalA) metalB = pick(rng, METALS);
 
-  const percSteps = Array.from({ length: STEP_COUNT }, (_, i) => (i % 4 === 2 ? true : rng() < 0.2));
   const bassOctave = Array.from({ length: STEP_COUNT }, () => rng() < 0.18);
   const accent = Array.from({ length: STEP_COUNT }, (_, i) => (i % 8 === 0 ? true : rng() < 0.22));
 
@@ -88,14 +88,14 @@ export function deriveTrack(pattern: Pattern): Track {
   ]);
 
   return {
-    template: Math.floor(rng() * TEMPLATE_COUNT),
     kick: pick(rng, KICKS),
     backbeat: pick(rng, BACKBEATS),
     shaker: pick(rng, SHAKERS),
     metalA,
     metalB,
-    percSteps,
-    metalSteps: [3 + Math.floor(rng() * 4), 10 + Math.floor(rng() * 5)],
+    percSteps: legacyPercSteps(drumVariant),
+    metalSteps: [drumVariant.metalStart, drumVariant.metalStart + 8],
+    fillPeriodBars: drumVariant.fillPeriodBars,
     bassOctave,
     accent,
     leadB,

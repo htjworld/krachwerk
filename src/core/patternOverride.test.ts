@@ -12,7 +12,7 @@ describe("pattern override encoding", () => {
     expect(decodePatternOverride(encoded)).toEqual(override);
   });
 
-  it("replaces the base kick/lead grid but keeps bass and hihat untouched", () => {
+  it("replaces the base kick/lead grid but keeps bass untouched", () => {
     const pattern = generatePattern("override-test");
     const override = overrideFromLayers(
       pattern.drum.kick.map((v) => !v),
@@ -21,7 +21,6 @@ describe("pattern override encoding", () => {
     const resolved = resolveLayers(pattern, override);
     expect(resolved.kick).toEqual(override.kick);
     expect(resolved.lead.map((c) => c.on)).toEqual(override.lead);
-    expect(resolved.hihat).toEqual(pattern.drum.hihat);
     expect(resolved.bass).toEqual(pattern.bass);
   });
 

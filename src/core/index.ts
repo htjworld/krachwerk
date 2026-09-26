@@ -1,4 +1,5 @@
 export * from "./prng";
+export * from "./seedCode";
 export * from "./scales";
 export * from "./voices";
 export * from "./pattern";
@@ -6,6 +7,9 @@ export * from "./traits";
 export * from "./patternOverride";
 export * from "./crosshairControl";
 export * from "./samples";
+export * from "./blueprint";
+export * from "./genome";
+export * from "./motifs";
 export * from "./track";
 export * from "./arrangement";
 export * from "./audioEngine";

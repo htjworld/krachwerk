@@ -1,12 +1,26 @@
 import { degreeToMidi, midiToFrequency, type Scale } from "./scales";
 import { mulberry32 } from "./prng";
-import { STEP_COUNT, type Pattern } from "./pattern";
+import { STEP_COUNT, type Pattern, type StepCell } from "./pattern";
 import { resolveLayers, type PatternOverride, type ResolvedLayers } from "./patternOverride";
 import type { CrosshairControl } from "./crosshairControl";
 import type { VoiceId } from "./voices";
 import { loadSampleBank, type SampleBank, type SampleId } from "./samples";
-import { buildArrangement, type Arrangement, type LayerId, type Section } from "./arrangement";
+import { buildArrangement, type Arrangement, type Section } from "./arrangement";
+import { cueActiveAtStep, cueFor, fillSteps, rateAt, rateStepActive, semitoneShift, type LayerCue, type LayerId } from "./blueprint";
+import { blueprintById, legacyCue } from "./blueprints/legacy";
+import { targetSecondsFor } from "./genome";
+import {
+  computeBass,
+  computeRiff,
+  computeScale,
+  familyDrumHit,
+  metropolisBass,
+  metropolisScale,
+  metropolisSeq,
+  metropolisSeqAccent,
+} from "./motifs";
 import { deriveTrack, type Track } from "./track";
+import { loadVoiceForCode, type VoiceLang } from "./voiceBank";
 
 export function secondsPerStep(tempo: number): number {
   return 60 / tempo / 4;
@@ -18,7 +32,7 @@ export function loopDurationSeconds(tempo: number): number {
 }
 
 export function arrangementFor(pattern: Pattern, tempo: number): Arrangement {
-  return buildArrangement(deriveTrack(pattern).template, tempo);
+  return buildArrangement(blueprintById(pattern.blueprintId), tempo, targetSecondsFor(pattern.genome));
 }
 
 export const DEFAULT_SAMPLE_RATE = 44100;
@@ -80,7 +94,7 @@ function makeSaturationCurve(drive: number): Float32Array<ArrayBuffer> {
 
 // ---------------------------------------------------------------- 믹스 버스
 
-interface Mix {
+export interface Mix {
   /** 사이드체인을 안 먹는 드럼 버스 */
   drum: GainNode;
   /** 킥에 맞춰 눌리는 악기 버스 */
@@ -169,7 +183,7 @@ function buildMix(ctx: BaseAudioContext, tempo: number, liveCutoffHz: number): M
 
 // ---------------------------------------------------------------- 드럼 (JS 믹싱)
 
-type DrumRole = "kick" | "hat" | "openHat" | "backbeat" | "perc" | "metal";
+export type DrumRole = "kick" | "hat" | "openHat" | "backbeat" | "perc" | "metal" | "lowDrum" | "tick" | "calls";
 
 interface DrumVoiceSpec {
   level: number;
@@ -184,28 +198,59 @@ const DRUM_VOICES: Record<DrumRole, DrumVoiceSpec> = {
   backbeat: { level: 0.6, pan: -0.1, send: 0.22 },
   perc: { level: 0.32, pan: 0.5, send: 0.16 },
   metal: { level: 0.36, pan: -0.55, send: 0.32 },
+  // compute의 저음 드럼 시퀀스(§4.2). 킥과 같은 자리(레벨·팬·리버브)에서 킥 전용
+  // 버스(kickHighpass)를 같이 쓴다 — §11 단계 6 전까진 아무도 이 역할로 hit()을 안 부른다.
+  lowDrum: { level: 1, pan: 0, send: 0.02 },
+  // metropolis 인트로 펄스(§4.2/§16.7: 2분음표 틱). 지금은 킥 샘플을 재사용한다.
+  tick: { level: 0.6, pan: 0, send: 0.05 },
+  // 로봇 목소리가 시드 코드를 읽는다(§15.2 S1).
+  calls: { level: 0.8, pan: 0, send: 0.3 },
 };
 
-interface DrumMixer {
+const KICK_BUS_ROLES: readonly DrumRole[] = ["kick", "lowDrum"];
+
+export interface DrumMixer {
   hit(role: DrumRole, sample: AudioBuffer, time: number, level: number, rate?: number): void;
   /** 믹싱이 다 끝난 뒤에 부른다. 버퍼를 소스에 물려 그래프에 연결한다. */
   connect(): void;
+  /**
+   * 킥·lowDrum만 지나는 하이패스. §11 단계 6의 metropolis 아웃트로(kickLowCut, §16.4)가
+   * 이 frequency를 20Hz(사실상 무영향) → 최대 몇백Hz로 오토메이션해서 저역만 뺀다.
+   * 지금은 아무 섹션도 kickLowCut을 안 써서 항상 20Hz 그대로다 — 소리에 영향 없다.
+   */
+  kickHighpass: BiquadFilterNode;
 }
 
 function createDrumMixer(ctx: BaseAudioContext, mix: Mix, totalSamples: number): DrumMixer {
   // AudioBuffer의 채널 데이터에 바로 더한다. 중간 배열을 따로 두지 않으려는 것.
+  // kick/lowDrum만 별도 버퍼(kickDry)에 모아서 하이패스 하나를 태울 수 있게 한다.
   const dry = ctx.createBuffer(2, totalSamples, ctx.sampleRate);
   const left = dry.getChannelData(0);
   const right = dry.getChannelData(1);
+  const kickDry = ctx.createBuffer(2, totalSamples, ctx.sampleRate);
+  const kickLeft = kickDry.getChannelData(0);
+  const kickRight = kickDry.getChannelData(1);
   const wet = ctx.createBuffer(1, totalSamples, ctx.sampleRate);
   const send = wet.getChannelData(0);
 
+  const kickHighpass = ctx.createBiquadFilter();
+  kickHighpass.type = "highpass";
+  kickHighpass.frequency.value = 20;
+  kickHighpass.connect(mix.drum);
+
   return {
+    kickHighpass,
+
     connect() {
       const drySource = ctx.createBufferSource();
       drySource.buffer = dry;
       drySource.connect(mix.drum);
       drySource.start(0);
+
+      const kickSource = ctx.createBufferSource();
+      kickSource.buffer = kickDry;
+      kickSource.connect(kickHighpass);
+      kickSource.start(0);
 
       const wetSource = ctx.createBufferSource();
       wetSource.buffer = wet;
@@ -227,6 +272,7 @@ function createDrumMixer(ctx: BaseAudioContext, mix: Mix, totalSamples: number):
       const gl = amount * Math.cos(angle) * Math.SQRT2;
       const gr = amount * Math.sin(angle) * Math.SQRT2;
       const gs = amount * spec.send;
+      const [outLeft, outRight] = KICK_BUS_ROLES.includes(role) ? [kickLeft, kickRight] : [left, right];
 
       const data = sample.getChannelData(0);
       const start = Math.round(time * ctx.sampleRate);
@@ -237,8 +283,8 @@ function createDrumMixer(ctx: BaseAudioContext, mix: Mix, totalSamples: number):
         for (let i = 0; i < frames; i++) {
           const v = data[i];
           const j = start + i;
-          left[j] += v * gl;
-          right[j] += v * gr;
+          outLeft[j] += v * gl;
+          outRight[j] += v * gr;
           send[j] += v * gs;
         }
         return;
@@ -252,8 +298,8 @@ function createDrumMixer(ctx: BaseAudioContext, mix: Mix, totalSamples: number):
         const frac = pos - k;
         const v = data[k] + (data[k + 1] - data[k]) * frac;
         const j = start + i;
-        left[j] += v * gl;
-        right[j] += v * gr;
+        outLeft[j] += v * gl;
+        outRight[j] += v * gr;
         send[j] += v * gs;
       }
     },
@@ -262,7 +308,7 @@ function createDrumMixer(ctx: BaseAudioContext, mix: Mix, totalSamples: number):
 
 // ---------------------------------------------------------------- 신스 (모노 보이스)
 
-type SynthLayer = "bass" | "lead" | "arp" | "stab" | "pad" | "riser";
+export type SynthLayer = "bass" | "lead" | "arp" | "stab" | "pad" | "riser" | "seqRiff" | "seqRun" | "glide" | "drone";
 
 interface StripSpec {
   level: number;
@@ -278,6 +324,10 @@ const SYNTH_STRIPS: Record<SynthLayer, StripSpec> = {
   stab: { level: 0.34, pan: 0.05, reverb: 0.3, delay: 0.18 },
   pad: { level: 0.3, pan: 0, reverb: 0.45, delay: 0.1 },
   riser: { level: 0.4, pan: 0, reverb: 0.25, delay: 0.1 },
+  seqRiff: { level: 0.4, pan: 0.15, reverb: 0.15, delay: 0.28 },
+  seqRun: { level: 0.34, pan: -0.2, reverb: 0.2, delay: 0.3 },
+  glide: { level: 0.3, pan: 0, reverb: 0.3, delay: 0.15 },
+  drone: { level: 0.25, pan: 0, reverb: 0.35, delay: 0 },
 };
 
 function buildStrip(ctx: BaseAudioContext, mix: Mix, spec: StripSpec): GainNode {
@@ -316,7 +366,7 @@ interface RatioTarget {
   smooth?: boolean;
 }
 
-interface MonoVoice {
+export interface MonoVoice {
   note(time: number, freq: number, duration: number, level: number): void;
 }
 
@@ -519,20 +569,80 @@ function scheduleRiser(
   source.stop(start + length);
 }
 
-// ---------------------------------------------------------------- 마디 스케줄링
+// 자유박/롱노트 자리(compute ambient drone, metropolis 인트로 베이스)에 쓰는 단순 지속음.
+function scheduleDrone(
+  ctx: BaseAudioContext,
+  destination: AudioNode,
+  scale: Scale,
+  degree: number,
+  start: number,
+  length: number
+): void {
+  const attack = Math.min(3, length * 0.4);
+  const release = Math.min(3, length * 0.4);
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.linearRampToValueAtTime(0.4, start + attack);
+  gain.gain.setValueAtTime(0.4, Math.max(start + attack, start + length - release));
+  gain.gain.linearRampToValueAtTime(0, start + length);
+  gain.connect(destination);
 
-function hatOn(intensity: number, step: number): boolean {
-  if (intensity < 0.3) return step % 4 === 2;
-  if (intensity < 0.55) return step % 2 === 0;
-  if (intensity < 0.8) return step % 2 === 0 || step % 4 === 3;
-  return true;
+  const osc = ctx.createOscillator();
+  osc.type = "triangle";
+  osc.frequency.value = midiToFrequency(degreeToMidi(scale, degree));
+  osc.connect(gain);
+  osc.start(start);
+  osc.stop(start + length);
+
+  const sub = ctx.createOscillator();
+  sub.type = "sine";
+  sub.frequency.value = midiToFrequency(degreeToMidi(scale, degree - scale.intervals.length));
+  sub.connect(gain);
+  sub.start(start);
+  sub.stop(start + length);
 }
 
-interface Rig {
+// 포르타멘토 스윕 (metropolis 인트로 glide). 섹션 안에서 2마디 구간마다 한 번씩 불린다.
+function scheduleGlide(
+  ctx: BaseAudioContext,
+  destination: AudioNode,
+  scale: Scale,
+  fromDegree: number,
+  toDegree: number,
+  start: number,
+  length: number
+): void {
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.linearRampToValueAtTime(0.3, start + length * 0.15);
+  gain.gain.linearRampToValueAtTime(0, start + length);
+  gain.connect(destination);
+
+  const osc = ctx.createOscillator();
+  osc.type = "sawtooth";
+  osc.frequency.setValueAtTime(midiToFrequency(degreeToMidi(scale, fromDegree)), start);
+  osc.frequency.exponentialRampToValueAtTime(midiToFrequency(degreeToMidi(scale, toDegree)), start + length * 0.9);
+  osc.connect(gain);
+  osc.start(start);
+  osc.stop(start + length);
+}
+
+// ---------------------------------------------------------------- 마디 스케줄링
+
+// 큐가 있고 이 마디에서 활성화된 rateSteps로 해당 스텝이 켜지는지. 큐 자체가 없으면(레이어가
+// 이 섹션에서 안 켜져 있으면) false. rateSteps를 안 쓰는 레이어(kick 등, 더미 rate:16만 들어
+// 있음)에 이 함수를 쓰면 안 된다 — 항상 true가 나온다.
+function cueStepActive(cue: LayerCue | null, sectionBar: number, step: number): boolean {
+  if (!cue) return false;
+  const rateStep = rateAt(cue, sectionBar) ?? { atBar: 0, rate: 16 as const };
+  return rateStepActive(rateStep, step);
+}
+
+export interface Rig {
   ctx: BaseAudioContext;
   mix: Mix;
   drums: DrumMixer;
-  voices: Record<"bass" | "lead" | "arp", MonoVoice>;
+  voices: Record<"bass" | "lead" | "arp" | "seqRiff" | "seqRun", MonoVoice>;
   stabVoices: MonoVoice[];
   strips: Record<SynthLayer, GainNode>;
   bank: SampleBank;
@@ -541,30 +651,63 @@ interface Rig {
   layers: ResolvedLayers;
   noise: AudioBuffer;
   stepDur: number;
+  /** compute/metropolis 전용 조성. legacy는 pattern.scale 그대로다. */
+  motifScale: Scale;
+  /** compute(computeRiff)/metropolis(metropolisSeq) 리프. legacy는 null(seqRiff 큐를 안 쓴다). */
+  motifRiff: StepCell[] | null;
+  /** compute(computeBass)/metropolis(metropolisBass) 베이스. legacy는 null(기존 layers.bass를 쓴다). */
+  motifBass: { cells: StepCell[]; gateBeats: number | null } | null;
+  /** 로봇 목소리(§15.2 S1). "calls" 큐가 있는 블루프린트(compute)만 채운다. */
+  voiceBank: Map<string, AudioBuffer> | null;
 }
 
-function scheduleBar(
+export function scheduleBar(
   rig: Rig,
   section: Section,
   barIndex: number,
   sectionBar: number,
   barStart: number,
-  rng: () => number
+  rng: () => number,
+  swing = 0
 ): void {
+  // 자유박 섹션(metropolis freeIntro)은 격자 자체가 없다 — pad/glide/드론은
+  // renderArrangement가 섹션 단위로 직접 스케줄한다.
+  if (section.freeTime) return;
+
   const { mix, drums, voices, stabVoices, bank, pattern, track, layers, stepDur } = rig;
-  const active = (id: LayerId) => section.layers.includes(id);
   const intensity = section.intensity;
+  const isCompute = pattern.blueprintId === "compute";
+  const isMetropolis = pattern.blueprintId === "metropolis";
+  const familyHit =
+    isCompute || isMetropolis ? familyDrumHit(section.drumFamily, pattern.genome, barIndex) : null;
   const octave = pattern.scale.intervals.length;
   const isLastBar = sectionBar === section.bars - 1;
-  const isFill = isLastBar || sectionBar % 8 === 7;
+  // legacy(§11 단계 2 이관분)는 fill 배열을 안 쓰고 옛 방식대로 매 필 마디마다 rng()로
+  // 4종 중 하나를 고른다. compute/metropolis(§11 단계 6)는 section.fill/endFill을 채워서
+  // 이 분기를 안 타고 아래의 새 필 메커니즘(§11 단계 3)을 쓴다.
+  const legacyFill = section.fill.length === 0 && section.endFill === undefined;
+  // §11 단계 5: 필 주기가 게놈 drumVariant에서 나온다(4마디 또는 8마디). 예전엔 8로 고정.
+  const isFill = legacyFill && (isLastBar || sectionBar % track.fillPeriodBars === track.fillPeriodBars - 1);
   const fillKind = isFill ? Math.floor(rng() * 4) : -1;
   // 마지막 마디 뒷부분에서 하이햇을 빼면 다음 블록이 훨씬 세게 들어온다.
   const hatCutFrom = isFill ? 12 : STEP_COUNT;
   const shift = track.progression[Math.floor(barIndex / 4) % track.progression.length];
-  const at = (step: number) => barStart + step * stepDur;
+  // 홀수 16분 스텝을 swing×stepDur만큼 늦춘다(§11 단계 3, metropolis 측정 스윙).
+  const at = (step: number) => barStart + step * stepDur + (step % 2 === 1 ? swing * stepDur : 0);
+  const semitones = (step: number) => semitoneShift(section, sectionBar, step);
+  const withShift = (freq: number, step: number) => freq * 2 ** (semitones(step) / 12);
 
   if (sectionBar === 0 && intensity > 0.28) {
     drums.hit("metal", bank.cymbal, barStart, 0.5);
+  }
+
+  // 로봇 목소리(§15.2 S1): 마디마다 시드 코드 한 글자씩, 순서대로. 스텝 단위가 아니라
+  // 마디당 한 번이라 window/rate 대신 cueFor로만 "이 마디에 켜져 있는가"를 본다.
+  if (rig.voiceBank && cueFor(section, "calls", sectionBar)) {
+    const code = pattern.seedInput;
+    const char = code[barIndex % code.length];
+    const buf = rig.voiceBank.get(char);
+    if (buf) drums.hit("calls", buf, barStart, 0.8);
   }
 
   for (let step = 0; step < STEP_COUNT; step++) {
@@ -572,7 +715,18 @@ function scheduleBar(
     const accent = track.accent[step] ? 1.3 : 1;
     const downbeat = step % 4 === 0;
 
-    if (active("kick")) {
+    if (familyHit) {
+      // compute/metropolis: 드럼 계열이 킥/lowDrum/tick의 on-off를 정한다(§16.4). 소리는
+      // 지금은 전부 같은 킥 샘플을 재사용한다 — 역할별 음색은 §11 단계 6 청취 후 다듬는다.
+      if (familyHit.mask[step]) {
+        drums.hit(familyHit.role, bank[track.kick], time, 0.9 + 0.1 * intensity);
+        if (familyHit.role !== "tick") {
+          const depth = 0.34 + 0.24 * (1 - intensity);
+          mix.sidechain.gain.setValueAtTime(depth, time);
+          mix.sidechain.gain.linearRampToValueAtTime(1, time + Math.min(0.22, stepDur * 2.4));
+        }
+      }
+    } else if (cueActiveAtStep(section, "kick", sectionBar, step)) {
       const doubled = section.id.startsWith("build") && isLastBar && step % 2 === 0;
       if (layers.kick[step] || doubled || (intensity > 0.85 && step === 14 && rng() < 0.25)) {
         drums.hit("kick", bank[track.kick], time, (doubled ? 0.75 : 1) * (0.9 + 0.1 * intensity));
@@ -583,26 +737,27 @@ function scheduleBar(
       }
     }
 
-    if (active("backbeat") && (step === 4 || step === 12)) {
+    if (cueActiveAtStep(section, "backbeat", sectionBar, step) && (step === 4 || step === 12)) {
       const double = fillKind === 3 && step === 12;
       drums.hit("backbeat", bank[track.backbeat], time, double ? 0.85 : 0.7);
       if (double) drums.hit("backbeat", bank[track.backbeat], at(14), 0.6);
     }
 
-    if (active("hat") && step < hatCutFrom && hatOn(intensity, step)) {
+    const hatCue = cueActiveAtStep(section, "hat", sectionBar, step);
+    if (hatCue && step < hatCutFrom && cueStepActive(hatCue, sectionBar, step)) {
       const level = (downbeat ? 0.55 : step % 2 === 0 ? 0.4 : 0.24) * accent;
       drums.hit("hat", bank.hatClosed, time, level, 0.95 + rng() * 0.12);
     }
 
-    if (active("openHat") && step % 4 === 2) {
+    if (cueActiveAtStep(section, "openHat", sectionBar, step) && step % 4 === 2) {
       drums.hit("openHat", bank[step % 8 === 6 ? "hatOpenLong" : "hatOpen"], time, 0.42);
     }
 
-    if (active("perc") && track.percSteps[step]) {
+    if (cueActiveAtStep(section, "perc", sectionBar, step) && track.percSteps[step]) {
       drums.hit("perc", bank[track.shaker], time, 0.3 * accent, 0.9 + rng() * 0.25);
     }
 
-    if (active("metal")) {
+    if (cueActiveAtStep(section, "metal", sectionBar, step)) {
       const hit = step === track.metalSteps[0] ? track.metalA : step === track.metalSteps[1] ? track.metalB : null;
       if (hit && rng() < 0.3 + 0.5 * intensity) {
         drums.hit("metal", bank[hit], time, 0.4 + 0.3 * intensity, 0.85 + rng() * 0.4);
@@ -612,43 +767,89 @@ function scheduleBar(
       }
     }
 
-    if (active("bass") && layers.bass[step].on && (intensity >= 0.5 || step % 2 === 0)) {
-      const jump = track.bassOctave[step] && intensity > 0.6 ? octave : 0;
-      const degree = layers.bass[step].degree + shift + jump - octave;
-      voices.bass.note(
+    const bassCue = cueActiveAtStep(section, "bass", sectionBar, step);
+    if (bassCue && cueStepActive(bassCue, sectionBar, step)) {
+      if (rig.motifBass) {
+        const cell = rig.motifBass.cells[step];
+        if (cell.on) {
+          const freq = isCompute
+            ? midiToFrequency(rig.motifScale.rootMidi + cell.degree)
+            : midiToFrequency(degreeToMidi(rig.motifScale, cell.degree));
+          const longNote = bassCue.window && bassCue.window[0] === bassCue.window[1];
+          const duration = longNote
+            ? stepDur * 10
+            : rig.motifBass.gateBeats !== null
+              ? stepDur * 2 * rig.motifBass.gateBeats
+              : stepDur * (intensity > 0.7 ? 0.85 : 1.5);
+          voices.bass.note(time, withShift(freq, step), duration, 0.9 * accent);
+        }
+      } else if (layers.bass[step].on) {
+        const jump = track.bassOctave[step] && intensity > 0.6 ? octave : 0;
+        const degree = layers.bass[step].degree + shift + jump - octave;
+        voices.bass.note(
+          time,
+          withShift(midiToFrequency(degreeToMidi(pattern.scale, degree)), step),
+          stepDur * (intensity > 0.7 ? 0.85 : 1.5),
+          0.9 * accent
+        );
+      }
+    }
+
+    const seqRiffCue = cueActiveAtStep(section, "seqRiff", sectionBar, step);
+    if (seqRiffCue && rig.motifRiff) {
+      const cell = rig.motifRiff[step];
+      if (cell.on) {
+        const freq = isCompute
+          ? midiToFrequency(rig.motifScale.rootMidi + cell.degree + (section.seqOctave ?? 0))
+          : midiToFrequency(degreeToMidi(rig.motifScale, cell.degree) + (section.seqOctave ?? 0));
+        const accentMul = isMetropolis ? metropolisSeqAccent(pattern.genome, step) : 1;
+        voices.seqRiff.note(time, withShift(freq, step), stepDur * 0.9, (0.5 + 0.3 * intensity) * accentMul * accent);
+      }
+    }
+
+    const seqRunCue = cueActiveAtStep(section, "seqRun", sectionBar, step);
+    if (seqRunCue && cueStepActive(seqRunCue, sectionBar, step)) {
+      const degree = track.arp[(step + barIndex) % STEP_COUNT] + shift + octave;
+      voices.seqRun.note(
         time,
-        midiToFrequency(degreeToMidi(pattern.scale, degree)),
-        stepDur * (intensity > 0.7 ? 0.85 : 1.5),
-        0.9 * accent
+        withShift(midiToFrequency(degreeToMidi(rig.motifScale, degree)), step),
+        stepDur * 0.4,
+        0.4 + 0.3 * intensity
       );
     }
 
-    if (active("lead")) {
+    if (cueActiveAtStep(section, "lead", sectionBar, step)) {
       // A A B A. 한 프레이즈만 반복하면 3분을 못 버틴다.
       const phrase = barIndex % 4 === 2 ? track.leadB : layers.lead;
       if (phrase[step].on) {
         const lift = intensity > 0.9 && barIndex % 8 >= 4 ? octave : 0;
         const degree = phrase[step].degree + shift + octave + lift;
-        voices.lead.note(time, midiToFrequency(degreeToMidi(pattern.scale, degree)), stepDur * 1.1, 0.8 * accent);
+        voices.lead.note(
+          time,
+          withShift(midiToFrequency(degreeToMidi(pattern.scale, degree)), step),
+          stepDur * 1.1,
+          0.8 * accent
+        );
       }
     }
 
     // 아르페지오는 저강도 구간에서 8분음표로 성글게, 피크에서 16분음표로 촘촘하게.
-    if (active("arp") && (intensity > 0.65 || step % 2 === 0)) {
+    const arpCue = cueActiveAtStep(section, "arp", sectionBar, step);
+    if (arpCue && cueStepActive(arpCue, sectionBar, step)) {
       const degree = track.arp[(step + barIndex) % STEP_COUNT] + shift + octave;
       voices.arp.note(
         time,
-        midiToFrequency(degreeToMidi(pattern.scale, degree)),
+        withShift(midiToFrequency(degreeToMidi(pattern.scale, degree)), step),
         stepDur * 0.75,
         0.45 + 0.3 * intensity
       );
     }
 
-    if (active("stab") && (step === 0 || step === 10)) {
+    if (cueActiveAtStep(section, "stab", sectionBar, step) && (step === 0 || step === 10)) {
       track.chord.forEach((chordDegree, i) => {
         stabVoices[i].note(
           time,
-          midiToFrequency(degreeToMidi(pattern.scale, chordDegree + shift)),
+          withShift(midiToFrequency(degreeToMidi(pattern.scale, chordDegree + shift)), step),
           stepDur * 2,
           0.55
         );
@@ -656,16 +857,30 @@ function scheduleBar(
     }
   }
 
-  if (isFill && fillKind >= 0 && fillKind <= 2) {
-    if (fillKind === 0) {
-      const toms: SampleId[] = ["tomLow", "tomLow", "tomMid", "tomHigh"];
-      toms.forEach((tom, i) => drums.hit("perc", bank[tom], at(12 + i), 0.6 + i * 0.06));
-    } else if (fillKind === 1) {
-      for (let i = 0; i < 4; i++) {
-        drums.hit("backbeat", bank.snareTight, at(12 + i), 0.3 + i * 0.12, 1 + i * 0.05);
+  if (legacyFill) {
+    if (isFill && fillKind >= 0 && fillKind <= 2) {
+      if (fillKind === 0) {
+        const toms: SampleId[] = ["tomLow", "tomLow", "tomMid", "tomHigh"];
+        toms.forEach((tom, i) => drums.hit("perc", bank[tom], at(12 + i), 0.6 + i * 0.06));
+      } else if (fillKind === 1) {
+        for (let i = 0; i < 4; i++) {
+          drums.hit("backbeat", bank.snareTight, at(12 + i), 0.3 + i * 0.12, 1 + i * 0.05);
+        }
+      } else {
+        drums.hit("metal", bank[track.metalB], at(14), 0.6, 0.7);
       }
-    } else {
-      drums.hit("metal", bank[track.metalB], at(14), 0.6, 0.7);
+    }
+  } else {
+    // 새 필 메커니즘(§11 단계 3): fill 배열의 주기적 필 + endFill(섹션 마지막 마디 전용).
+    // 어느 역할에 꽂을지는 블루프린트별 드럼 계열이 정할 일이라 §11 단계 6 전까지는
+    // kick 자리를 빌려 스텝 패턴만 검증한다.
+    for (const f of section.fill) {
+      if (sectionBar % f.everyBars === f.atBarInCycle) {
+        for (const step of fillSteps(f.kind)) drums.hit("kick", bank[track.kick], at(step), 1);
+      }
+    }
+    if (section.endFill && isLastBar) {
+      for (const step of fillSteps(section.endFill)) drums.hit("kick", bank[track.kick], at(step), 1);
     }
   }
 }
@@ -751,6 +966,31 @@ async function buildRig(
     (Object.keys(SYNTH_STRIPS) as SynthLayer[]).map((id) => [id, buildStrip(ctx, mix, SYNTH_STRIPS[id])])
   ) as Record<SynthLayer, GainNode>;
 
+  const motifScale =
+    pattern.blueprintId === "compute"
+      ? computeScale(pattern.genome)
+      : pattern.blueprintId === "metropolis"
+        ? metropolisScale(pattern.genome)
+        : pattern.scale;
+  const motifRiff =
+    pattern.blueprintId === "compute"
+      ? computeRiff(pattern.genome)
+      : pattern.blueprintId === "metropolis"
+        ? metropolisSeq(pattern.genome)
+        : null;
+  const motifBass =
+    pattern.blueprintId === "compute"
+      ? { cells: computeBass(pattern.genome), gateBeats: null }
+      : pattern.blueprintId === "metropolis"
+        ? (() => {
+            const b = metropolisBass(pattern.genome);
+            return { cells: b.cells, gateBeats: b.gateBeats };
+          })()
+        : null;
+  // "calls" 큐는 지금 compute 블루프린트만 쓴다(§16.4). 언어는 게놈 밖 — 곡 정체성과 무관하다.
+  const voiceLang: VoiceLang = pattern.seedHash % 2 === 0 ? "de" : "en";
+  const voiceBank = pattern.blueprintId === "compute" ? await loadVoiceForCode(ctx, voiceLang, pattern.seedInput) : null;
+
   const rig: Rig = {
     ctx,
     mix,
@@ -759,6 +999,8 @@ async function buildRig(
       bass: createVoice(ctx, strips.bass, pattern.bassVoice, noise, duration, 0.6),
       lead: createVoice(ctx, strips.lead, pattern.leadVoice, noise, duration, 0.25),
       arp: createVoice(ctx, strips.arp, "square", noise, duration, 0.45),
+      seqRiff: createVoice(ctx, strips.seqRiff, "triSub", noise, duration, 0.4),
+      seqRun: createVoice(ctx, strips.seqRun, "sawUnison", noise, duration, 0.35),
     },
     stabVoices: [0, 1, 2].map(() => createVoice(ctx, strips.stab, "sawUnison", noise, duration, 0.4)),
     strips,
@@ -768,6 +1010,10 @@ async function buildRig(
     layers: resolveLayers(pattern, override),
     noise,
     stepDur: secondsPerStep(tempo),
+    motifScale,
+    motifRiff,
+    motifBass,
+    voiceBank,
   };
 
   return { ctx, rig };
@@ -785,25 +1031,50 @@ export async function renderArrangement(pattern: Pattern, options: RenderOptions
     const start = section.startBar * arrangement.barSeconds;
     const length = section.bars * arrangement.barSeconds;
 
-    rig.mix.tone.frequency.setValueAtTime(section.filterFrom, start);
-    rig.mix.tone.frequency.exponentialRampToValueAtTime(Math.max(120, section.filterTo), start + length);
+    rig.mix.tone.frequency.setValueAtTime(section.filter.from, start);
+    rig.mix.tone.frequency.exponentialRampToValueAtTime(Math.max(120, section.filter.to), start + length);
+
+    // 킥 저역 컷 (§11 단계 5, §16.4 metropolis 아웃트로용). 지금은 어떤 섹션도 kickLowCut을
+    // 안 써서 이 블록이 안 걸린다 — kickHighpass는 항상 20Hz(무영향) 그대로다.
+    if (section.kickLowCut) {
+      rig.drums.kickHighpass.frequency.setValueAtTime(section.kickLowCut.from, start);
+      rig.drums.kickHighpass.frequency.exponentialRampToValueAtTime(
+        Math.max(20, section.kickLowCut.to),
+        start + length
+      );
+    }
 
     // 에너지 곡선. 인트로와 피크가 같은 음량으로 나오면 3분 내내 평평하게 들린다.
     const level = 0.42 + 0.48 * section.intensity;
     rig.mix.master.gain.setValueAtTime(level, start);
     rig.mix.master.gain.linearRampToValueAtTime(level, start + length * 0.85);
 
-    if (section.layers.includes("pad")) {
+    if (section.cues.some((cue) => cue.layer === "pad")) {
       schedulePad(ctx, rig.strips.pad, pattern.scale, rig.track.chord[0], start, length);
     }
-    if (section.layers.includes("riser")) {
+    if (section.cues.some((cue) => cue.layer === "riser")) {
       scheduleRiser(ctx, rig.strips.riser, rig.noise, start, length);
+    }
+    if (section.cues.some((cue) => cue.layer === "drone")) {
+      scheduleDrone(ctx, rig.strips.drone, rig.motifScale, -rig.motifScale.intervals.length, start, length);
+    }
+    if (section.cues.some((cue) => cue.layer === "glide")) {
+      for (let b = 0; b < section.bars; b += 2) {
+        const gStart = start + b * arrangement.barSeconds;
+        const gLength = Math.min(2, section.bars - b) * arrangement.barSeconds;
+        scheduleGlide(ctx, rig.strips.glide, rig.motifScale, 0, 7, gStart, gLength);
+      }
+    }
+    // 자유박 섹션(metropolis freeIntro)의 베이스 롱노트: scheduleBar가 이 섹션을 통째로
+    // 건너뛰므로 섹션 단위로 직접 켠다.
+    if (section.freeTime && section.cues.some((cue) => cue.layer === "bass")) {
+      scheduleDrone(ctx, rig.strips.bass, rig.motifScale, -rig.motifScale.intervals.length, start, length);
     }
 
     for (let sectionBar = 0; sectionBar < section.bars; sectionBar++) {
       const barIndex = section.startBar + sectionBar;
       const rng = mulberry32((pattern.seedHash ^ ((barIndex + 1) * 0x9e3779b1)) >>> 0);
-      scheduleBar(rig, section, barIndex, sectionBar, barIndex * arrangement.barSeconds, rng);
+      scheduleBar(rig, section, barIndex, sectionBar, barIndex * arrangement.barSeconds, rng, arrangement.swing);
     }
   }
 
@@ -813,16 +1084,19 @@ export async function renderArrangement(pattern: Pattern, options: RenderOptions
 
 // 매트릭스 에디터와 크로스헤어용 한 마디 미리듣기. 전체 편곡을 다시 렌더링하면
 // 셀 하나 누를 때마다 몇 초씩 걸려서, 여기서는 피크에 해당하는 한 마디만 뽑아 반복 재생한다.
+// legacyCue를 그대로 써서 옛 hatOn/베이스/아르페지오 게이트(§16.7)와 fixture가 계속 맞는다.
+const PREVIEW_LAYERS: LayerId[] = ["kick", "hat", "openHat", "backbeat", "perc", "metal", "bass", "lead"];
+const PREVIEW_INTENSITY = 0.85;
 const PREVIEW_SECTION: Section = {
   id: "preview",
-  weight: 1,
   startBar: 0,
   // 1로 두면 scheduleBar가 "섹션 마지막 마디"로 보고 필을 넣어버린다.
   bars: 8,
-  intensity: 0.85,
-  filterFrom: 18000,
-  filterTo: 18000,
-  layers: ["kick", "hat", "openHat", "backbeat", "perc", "metal", "bass", "lead"],
+  intensity: PREVIEW_INTENSITY,
+  cues: PREVIEW_LAYERS.map((layer) => legacyCue(layer, PREVIEW_INTENSITY)),
+  drumFamily: "none",
+  fill: [],
+  filter: { from: 18000, to: 18000 },
 };
 
 export async function renderLoopBuffer(pattern: Pattern, options: RenderOptions = {}): Promise<AudioBuffer> {
@@ -830,10 +1104,11 @@ export async function renderLoopBuffer(pattern: Pattern, options: RenderOptions 
   const duration = loopDurationSeconds(tempo);
   const { ctx, rig } = await buildRig(pattern, { ...options, onProgress: undefined }, duration);
 
-  rig.mix.tone.frequency.value = PREVIEW_SECTION.filterFrom;
+  rig.mix.tone.frequency.value = PREVIEW_SECTION.filter.from;
   rig.mix.master.gain.value = 0.85;
   const rng = mulberry32((pattern.seedHash ^ 0x9e3779b1) >>> 0);
-  scheduleBar(rig, PREVIEW_SECTION, 0, 0, 0, rng);
+  const swing = blueprintById(pattern.blueprintId).swing;
+  scheduleBar(rig, PREVIEW_SECTION, 0, 0, 0, rng, swing);
 
   rig.drums.connect();
   return normalize(await ctx.startRendering());

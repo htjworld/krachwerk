@@ -51,7 +51,6 @@ export function overrideFromLayers(kick: boolean[], lead: boolean[]): PatternOve
 
 export interface ResolvedLayers {
   kick: boolean[];
-  hihat: boolean[];
   bass: StepCell[];
   lead: StepCell[];
 }
@@ -60,11 +59,10 @@ export interface ResolvedLayers {
 // override가 없으면 기본 패턴 그대로다 (4.4).
 export function resolveLayers(pattern: Pattern, override?: PatternOverride | null): ResolvedLayers {
   if (!override) {
-    return { kick: pattern.drum.kick, hihat: pattern.drum.hihat, bass: pattern.bass, lead: pattern.lead };
+    return { kick: pattern.drum.kick, bass: pattern.bass, lead: pattern.lead };
   }
   return {
     kick: override.kick,
-    hihat: pattern.drum.hihat,
     bass: pattern.bass,
     lead: pattern.lead.map((cell, i) => ({ degree: cell.degree, on: override.lead[i] })),
   };

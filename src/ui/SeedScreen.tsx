@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useI18n } from "../i18n/i18n";
-import { findSeedForTraits, randomSeedCandidate, NO_TRAITS, type TraitSelection } from "../core";
+import { canonicalize, findSeedForTraits, randomSeedCandidate, NO_TRAITS, type TraitSelection } from "../core";
 import { TraitToggles } from "./TraitToggles";
 
 interface Props {
@@ -17,11 +17,14 @@ export function SeedScreen({ onGenerate }: Props) {
   const handleRandom = () => setSeedInput(randomSeedCandidate());
 
   const handleGenerate = () => {
+    // 여기서 정규 코드로 바꿔 두면 그 뒤로는(URL, 공유 링크, 화면 표시) 전부 코드로만
+    // 다닌다. generatePattern도 어차피 내부에서 canonicalize하지만, 미리 해 두면 주소창에
+    // 뜨는 값과 pattern.seedInput이 처음부터 같다 (§11 단계 4).
     if (hasTraits) {
-      onGenerate(findSeedForTraits(traits));
+      onGenerate(canonicalize(findSeedForTraits(traits)));
       return;
     }
-    onGenerate(seedInput.trim() || randomSeedCandidate());
+    onGenerate(canonicalize(seedInput.trim() || randomSeedCandidate()));
   };
 
   return (
