@@ -6,6 +6,8 @@
   --panel: #21262d;
   --playhead: #3a3a3a;
   --text-on-ambient: #0d1117;
+  /* App.tsx가 body 배경으로 5초마다 토글하는 두 색 중 초록 쪽과 동일한 값 */
+  --ambient-green: #00ff00;
   --font-device: "Courier New", "D2Coding", "Noto Sans Mono CJK KR", monospace;
   --font-frame: -apple-system, BlinkMacSystemFont, "Segoe UI", "Pretendard", sans-serif;
 }
@@ -160,10 +162,106 @@ button {
   margin-bottom: 20px;
 }
 
-.language-toggle {
+.sr-only {
   position: absolute;
-  top: 16px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.logo-wrap {
+  margin: 0 0 24px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  overflow-x: auto; /* ponytail: 75열 block art가 계산보다 넓어지는 극단 뷰포트에서도 잘리지 않게 */
+}
+
+.logo-ascii {
+  margin: 0;
+  font-family: var(--font-device);
+  color: var(--ambient-green);
+  line-height: 1.15;
+  text-align: center;
+  font-size: clamp(4px, 2.1vw, 13px);
+}
+
+.logo-ascii[data-lang="ko"] {
+  font-size: clamp(22px, 6vw, 40px);
+  font-weight: bold;
+  letter-spacing: 0.12em;
+}
+
+.logo-line {
+  display: block;
+  opacity: 0;
+  transform: translateY(2px);
+  animation-name: logo-line-in;
+  animation-timing-function: ease-out;
+  animation-fill-mode: forwards;
+}
+
+@keyframes logo-line-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-line {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.language-toggle {
+  position: fixed;
+  bottom: 16px;
   right: 16px;
+  z-index: 10;
+}
+
+.device-stack--wide {
+  max-width: 640px;
+}
+
+.device--seed {
+  max-width: 640px;
+  padding: 28px;
+}
+
+.seed-composer {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.seed-composer .device-input {
+  flex: 1;
+  font-size: 1.3em;
+  padding: 16px 18px;
+  border-radius: 16px;
+}
+
+.seed-composer .device-button-primary {
+  font-size: 1.05em;
+  padding: 0 24px;
+  border-radius: 16px;
+  white-space: nowrap;
+}
+
+.seed-random-button {
+  display: block;
+  margin: 0 0 20px;
+  padding-left: 0;
 }
 
 .matrix-grid {

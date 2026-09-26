@@ -8,7 +8,7 @@ interface Props {
 }
 
 export function SeedScreen({ onGenerate }: Props) {
-  const { t, lang, setLang } = useI18n();
+  const { t } = useI18n();
   const [seedInput, setSeedInput] = useState("");
   const [traits, setTraits] = useState<TraitSelection>(NO_TRAITS);
 
@@ -28,21 +28,8 @@ export function SeedScreen({ onGenerate }: Props) {
   };
 
   return (
-    <div className="device" style={{ position: "relative" }}>
-      <button
-        type="button"
-        className="device-text-button language-toggle"
-        onClick={() => setLang(lang === "ko" ? "en" : "ko")}
-      >
-        {t("language.toggle")}
-      </button>
-      <h1 className="device-heading">{t("seedScreen.heading")}</h1>
-      <p className="device-subheading">{t("seedScreen.subheading")}</p>
-
-      <label className="device-label" htmlFor="seed-input">
-        {t("seedScreen.inputLabel")}
-      </label>
-      <div className="button-row" style={{ marginTop: 0, marginBottom: 16 }}>
+    <div className="device device--seed">
+      <div className="seed-composer">
         <input
           id="seed-input"
           className="device-input"
@@ -50,17 +37,17 @@ export function SeedScreen({ onGenerate }: Props) {
           placeholder={t("seedScreen.inputPlaceholder")}
           onChange={(e) => setSeedInput(e.target.value)}
         />
-        <button type="button" className="device-button" onClick={handleRandom}>
-          {t("seedScreen.randomButton")}
+        <button type="button" className="device-button-primary" onClick={handleGenerate}>
+          {t("seedScreen.generateButton")}
         </button>
       </div>
 
+      <button type="button" className="device-text-button seed-random-button" onClick={handleRandom}>
+        {t("seedScreen.randomButton")}
+      </button>
+
       <span className="device-label">{t("seedScreen.traitsHeading")}</span>
       <TraitToggles traits={traits} onChange={setTraits} />
-
-      <button type="button" className="device-button-primary" onClick={handleGenerate}>
-        {t("seedScreen.generateButton")}
-      </button>
     </div>
   );
 }

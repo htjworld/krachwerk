@@ -1,10 +1,10 @@
 {
   "appTitle": "Krachwerk",
+  "brand": {
+    "wordmark": "KRACHWERK"
+  },
   "seedScreen": {
-    "heading": "Make electronic music from one seed",
-    "subheading": "The same seed always plays the same track",
-    "inputLabel": "Seed",
-    "inputPlaceholder": "Type any number or string",
+    "inputPlaceholder": "SEED",
     "randomButton": "Generate a random seed",
     "traitsHeading": "Pick a mood (optional)",
     "generateButton": "Generate track"

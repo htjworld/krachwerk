@@ -118,7 +118,7 @@ export function ResultScreen({
   onClearUserKit,
   receivedLocalKit,
 }: Props) {
-  const { t, lang, setLang } = useI18n();
+  const { t } = useI18n();
   const [showMatrix, setShowMatrix] = useState(false);
   const [showCrosshair, setShowCrosshair] = useState(false);
   const [showUserKit, setShowUserKit] = useState(false);
@@ -160,14 +160,7 @@ export function ResultScreen({
 
   return (
     <>
-      <div className="device" style={{ position: "relative" }}>
-        <button
-          type="button"
-          className="device-text-button language-toggle"
-          onClick={() => setLang(lang === "ko" ? "en" : "ko")}
-        >
-          {t("language.toggle")}
-        </button>
+      <div className="device">
         <h1 className="device-heading">{t("resultScreen.generatedMessage")}</h1>
 
         <p className="track-summary">

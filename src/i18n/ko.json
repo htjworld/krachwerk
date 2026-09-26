@@ -1,10 +1,10 @@
 {
   "appTitle": "Krachwerk",
+  "brand": {
+    "wordmark": "크라흐베르크"
+  },
   "seedScreen": {
-    "heading": "시드 하나로 전자음악을 만들어요",
-    "subheading": "같은 시드는 언제 열어도 항상 같은 트랙이에요",
-    "inputLabel": "시드",
-    "inputPlaceholder": "숫자나 문자열을 입력해보세요",
+    "inputPlaceholder": "SEED",
     "randomButton": "무작위로 만들기",
     "traitsHeading": "성향을 골라보세요 (선택)",
     "generateButton": "생성하기"

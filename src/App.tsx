@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { I18nProvider } from "./i18n/i18n";
+import { Logo } from "./ui/Logo";
+import { LanguageToggle } from "./ui/LanguageToggle";
 import { SeedScreen } from "./ui/SeedScreen";
 import { ResultScreen } from "./ui/ResultScreen";
 import {
@@ -131,7 +133,11 @@ function AppContent() {
   if (!seed) {
     return (
       <div className="ambient-bg">
-        <SeedScreen onGenerate={handleGenerate} />
+        <div className="device-stack device-stack--wide">
+          <Logo />
+          <SeedScreen onGenerate={handleGenerate} />
+        </div>
+        <LanguageToggle />
       </div>
     );
   }
@@ -159,6 +165,7 @@ function AppContent() {
           receivedLocalKit={receivedLocalKit}
         />
       </div>
+      <LanguageToggle />
     </div>
   );
 }
