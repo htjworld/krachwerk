@@ -1,6 +1,6 @@
 import { mulberry32, pick } from "./prng";
 import { STEP_COUNT, type Pattern, type StepCell } from "./pattern";
-import type { SampleId } from "./samples";
+import type { KitId, SampleId } from "./samples";
 import { legacyDrumVariantFor, legacyPercSteps } from "./motifs";
 
 // generatePattern이 뽑는 것(템포, 스케일, 보이스, 16스텝 베이스/리드)은 시드의 정체성이자
@@ -9,9 +9,26 @@ import { legacyDrumVariantFor, legacyPercSteps } from "./motifs";
 // 시드 하나에서 결정론적으로 나오는 건 똑같다.
 const TRACK_SALT = 0x9e3779b9;
 
-const KICKS: SampleId[] = ["kickTight", "kickMid", "kickLong"];
-const BACKBEATS: SampleId[] = ["clap", "snare", "snareTight", "rim"];
-const SHAKERS: SampleId[] = ["maraca", "clave", "congaHigh", "cowbell"];
+// legacy 킷 다양성(§15.3/§15.5): analog808(코어) 외에 uzu-drumkit·Simmons로 킥/스네어/퍼커션
+// 세트를 통째로 바꿔 낀다. 하나 고르면 buildRig가 그 킷의 샘플만 받는다(samples.ts).
+const KITS: (KitId | null)[] = [null, "legacy-uzu", "legacy-simmons"];
+
+const KICKS_BY_KIT: Record<string, SampleId[]> = {
+  core: ["kickTight", "kickMid", "kickLong"],
+  "legacy-uzu": ["uzuBd1", "uzuBd2", "uzuBd3", "uzuBd4", "uzuBd5", "uzuBd6", "uzuBd7", "uzuBd8"],
+  // 심몬스 팩엔 킥이 없어서(§15.6) uzu 킥을 빌린다.
+  "legacy-simmons": ["uzuBd1", "uzuBd2", "uzuBd3", "uzuBd4"],
+};
+const BACKBEATS_BY_KIT: Record<string, SampleId[]> = {
+  core: ["clap", "snare", "snareTight", "rim"],
+  "legacy-uzu": ["uzuSd1", "uzuSd2", "uzuSd3", "uzuSd4", "uzuSd5", "uzuCp1", "uzuCp2", "uzuRim1", "uzuRim2"],
+  "legacy-simmons": ["freesoundSimmonsSnare1", "freesoundSimmonsSnare2", "freesoundSimmonsSnare3", "freesoundCr78Snare"],
+};
+const SHAKERS_BY_KIT: Record<string, SampleId[]> = {
+  core: ["maraca", "clave", "congaHigh", "cowbell"],
+  "legacy-uzu": ["uzuSh1", "uzuTb1", "uzuCb1"],
+  "legacy-simmons": ["freesoundSimmonsPerc", "freesoundSimmonsNoise1", "freesoundSimmonsNoise2", "freesoundSimmonsNoise3"],
+};
 const METALS: SampleId[] = [
   "anvil1",
   "anvil2",
@@ -26,6 +43,8 @@ const METALS: SampleId[] = [
 ];
 
 export interface Track {
+  /** 킥/스네어/퍼커션 세트를 통째로 바꿔 끼는 킷(§15.3). null이면 코어(analog808). */
+  kit: KitId | null;
   kick: SampleId;
   backbeat: SampleId;
   shaker: SampleId;
@@ -54,6 +73,11 @@ export interface Track {
 export function deriveTrack(pattern: Pattern): Track {
   const rng = mulberry32((pattern.seedHash ^ TRACK_SALT) >>> 0);
   const drumVariant = legacyDrumVariantFor(pattern.genome.drumVariant);
+
+  // 킷 선택은 compute/metropolis도 같은 rng 자리를 소비한다(호출 순서를 지키려는 것 —
+  // §11 단계 4/5의 교훈). 실제로는 legacy만 킷을 쓴다(kick/backbeat/shaker 풀 선택).
+  const kit = pick(rng, KITS);
+  const kitKey = kit ?? "core";
 
   const metalA = pick(rng, METALS);
   let metalB = pick(rng, METALS);
@@ -88,9 +112,10 @@ export function deriveTrack(pattern: Pattern): Track {
   ]);
 
   return {
-    kick: pick(rng, KICKS),
-    backbeat: pick(rng, BACKBEATS),
-    shaker: pick(rng, SHAKERS),
+    kit,
+    kick: pick(rng, KICKS_BY_KIT[kitKey]),
+    backbeat: pick(rng, BACKBEATS_BY_KIT[kitKey]),
+    shaker: pick(rng, SHAKERS_BY_KIT[kitKey]),
     metalA,
     metalB,
     percSteps: legacyPercSteps(drumVariant),

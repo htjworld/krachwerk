@@ -1,8 +1,8 @@
 Krachwerk 샘플 출처 / Sample credits
 ====================================
 
-이 폴더의 모든 오디오 파일은 CC0 1.0 (퍼블릭 도메인 기증)이다.
-All audio in this folder is CC0 1.0 (public domain dedication).
+이 폴더의 모든 오디오 파일은 CC0 1.0 또는 퍼블릭 도메인이다 (Unlicense, 미국 정부 저작물, 권리자 공개 포함). 폴더별 근거는 아래.
+All audio in this folder is CC0 1.0 or public domain (Unlicense, US government work, released by holder). Details per folder below.
 
 
 808/  — Roland TR-808 Rhythm Composer
@@ -32,3 +32,121 @@ metal/ — 금속·기계 타악기 (Kraftwerk의 "Metall auf Metall" 계열 소
 
 CC0라서 표기 의무는 없지만, 원 제작자에 대한 예의로 남겨둔다.
 Attribution is not required under CC0; it is kept here out of courtesy.
+
+
+===== v2 추가분 (2026-09-26) / v2 additions =====
+
+공통 가공: 무음 제거, 모노 다운믹스, 16bit, 길이 상한(드럼 2초, 효과 1~2초, 목소리 0.7초), 끝부분 페이드.
+Common processing: silence trimmed, mono downmix, 16-bit, length cap, short fade-out.
+
+voice/  — 로봇 목소리 0~9, a~z (de-*, en-*) / robot voice characters
+  eSpeak NG 1.52.0 (espeakng-loader 0.2.4 파이썬 패키지의 라이브러리)로 렌더링. 속도 140, 피치 35, 억양 범위 0.
+  eSpeak NG로 합성한 음성 출력물은 GPL 대상이 아니다 (eSpeak 작성자 J. Duddington 답변:
+  https://sourceforge.net/p/espeak/discussion/538920/thread/c6944a60/). 렌더링 프로그램은 앱에 포함하지 않는다.
+  이 파일들은 Krachwerk가 만든 것이며 CC0 1.0으로 배포한다. 22.05kHz.
+  Rendered with eSpeak NG 1.52.0; speech output is not covered by eSpeak's GPL. Released here as CC0 1.0.
+
+uzu/  — tidalcycles/uzu-drumkit (Unlicense, public domain) commit 2f3e05c70ab4d73ad053a1467adec89bd27377a0
+  https://github.com/tidalcycles/uzu-drumkit  제작: Switch Angel, Mot4i, Ludens
+  brk/10_break_amen_pprocessed.wav는 저작권 있는 음반 소스라서 제외했다 / Amen break excluded.
+  44.1kHz. 파일 대응 / file map:
+    bd-1.wav     bd/10_bd_switchangel.wav
+    bd-2.wav     bd/11_bd_mot4i.wav
+    bd-3.wav     bd/12_bd_mot4i.wav
+    bd-4.wav     bd/13_bd_mot4i.wav
+    bd-5.wav     bd/14_bd_switchangel.wav
+    bd-6.wav     bd/15_bd_switchangel.wav
+    bd-7.wav     bd/16_bd_switchangel.wav
+    bd-8.wav     bd/17_bd_switchangel.wav
+    sd-1.wav     sd/10_sd_switchangel-bounce-2.wav
+    sd-2.wav     sd/11_sd_switchangel_3.wav
+    sd-3.wav     sd/12_sd_switchangel_2.wav
+    sd-4.wav     sd/13_sd_switchangel_2.wav
+    sd-5.wav     sd/14_sd.wav
+    hh-1.wav     hh/10_hh_switchangel.wav
+    hh-2.wav     hh/11_hh_mot4i.wav
+    hh-3.wav     hh/12_hh_switchangel.wav
+    hh-4.wav     hh/13_hh_switchangel.wav
+    hh-5.wav     hh/14_hh_mot4i.wav
+    oh-1.wav     oh/10_oh_switchangel.wav
+    oh-2.wav     oh/11_oh_switchangel.wav
+    oh-3.wav     oh/12_oh_switchangel.wav
+    oh-4.wav     oh/13_oh_switchangel.wav
+    cp-1.wav     cp/10_cp_switchangel.wav
+    cp-2.wav     cp/11_cp_mot4i.wav
+    rim-1.wav    rim/10_rim_switchangel.wav
+    rim-2.wav    rim/11_rim_switch_angel.wav
+    cb-1.wav     cb/10_perc_switchangel.wav
+    sh-1.wav     sh/10_sh_switchangel.wav
+    lt-1.wav     lt/10_lt_mot4i.wav
+    mt-1.wav     mt/10_mt_mot4i.wav
+    ht-1.wav     ht/10_ht_mot4i.wav
+    tb-1.wav     tb/10_tb.wav
+    misc-1.wav   misc/10_misc_switchangel_ludens.wav
+    misc-2.wav   misc/11_misc_switchangel_ludens.wav
+    misc-3.wav   misc/12_misc_switchangel_ludens.wav
+    misc-4.wav   misc/13_misc_switchangel_ludens.wav
+    misc-5.wav   misc/14_misc_switchangel_ludens.wav
+    cr-1.wav     cr/10_cr_switchangel.wav
+    cr-2.wav     cr/11_cr_mot4i.wav
+    rd-1.wav     rd/10_rd_switchangel.wav
+
+vcsl/  — Versilian Community Sample Library (CC0 1.0) commit c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e
+  https://github.com/sgossner/VCSL  44.1kHz. 최대 2초로 자름.
+    siren.wav            Aerophones/Free Aerophones/Siren/Main_SirenWhistle-002.wav
+    train-low.wav        Aerophones/Edge-blown Aerophones/Train Whistle, Toy/Main_TrainLow_Short-001.wav
+    train-med.wav        Aerophones/Edge-blown Aerophones/Train Whistle, Toy/Main_TrainMed_Short-001.wav
+    flexatone.wav        Idiophones/Struck Idiophones/Flexatone/flexatone_fast.wav
+    flexatone-slap.wav   Idiophones/Struck Idiophones/Flexatone/flexatone_slap1.wav
+    vibraslap.wav        Idiophones/Struck Idiophones/Vibraslap/Legacy/vibraslap_rr1.wav
+    fmpiano-c3.wav       Electrophones/TX81Z/FM Piano/FMPiano_C3_vl2.wav
+    fmpiano-c4.wav       Electrophones/TX81Z/FM Piano/FMPiano_C4_vl2.wav
+    clavi-c3.wav         Electrophones/TX81Z/Clavisynth/Clavisynth_C3_vl2.wav
+    clavi-c4.wav         Electrophones/TX81Z/Clavisynth/Clavisynth_C4_vl2.wav
+    glock-c5.wav         Idiophones/Struck Idiophones/Glockenspiel/glock_medium_C5_01.wav
+    glock-c6.wav         Idiophones/Struck Idiophones/Glockenspiel/glock_medium_C6_01.wav
+    chime-c4.wav         Idiophones/Struck Idiophones/Tubular Bells 1/chimes_C4_p_rr1.wav
+    triangle.wav         Idiophones/Struck Idiophones/Triangles/Legacy/1/triangle1_hit_mp_muted1.wav
+    glass-d5.wav         Idiophones/Friction Idiophones/Wine Glasses/Releases/Fast/glass4_D5_Fast_1_Decay.wav
+
+freesound/  — Freesound.org, 전부 CC0 1.0 (사운드 페이지에서 라이선스 개별 확인)
+  로그인 없이 받을 수 있는 고음질 미리듣기(MP3 128kbps)를 WAV 44.1kHz로 변환. 최대 1.5초(효과음 1초).
+  All CC0 1.0 (checked per sound page). Converted from HQ preview MP3.
+    cr78-snare.wav           #708816 by oceansonmars  "CR78Snare_2"  https://freesound.org/people/oceansonmars/sounds/708816/
+    cr78-tom.wav             #708817 by oceansonmars  "CR78Tom"  https://freesound.org/people/oceansonmars/sounds/708817/
+    simmons-tom.wav          #469683 by tarane468  "Simmons Drums (22).wav"  https://freesound.org/people/tarane468/sounds/469683/
+    simmons-cymbal-1.wav     #469684 by tarane468  "Simmons Drums (27).wav"  https://freesound.org/people/tarane468/sounds/469684/
+    simmons-snare-1.wav      #469685 by tarane468  "Simmons Drums (26).wav"  https://freesound.org/people/tarane468/sounds/469685/
+    simmons-hat-open.wav     #469686 by tarane468  "Simmons Drums (9).wav"  https://freesound.org/people/tarane468/sounds/469686/
+    simmons-snare-2.wav      #469687 by tarane468  "Simmons Drums (38).wav"  https://freesound.org/people/tarane468/sounds/469687/
+    simmons-snare-3.wav      #469688 by tarane468  "Simmons Drums (37).wav"  https://freesound.org/people/tarane468/sounds/469688/
+    simmons-hat-closed.wav   #469689 by tarane468  "Simmons Drums (4).wav"  https://freesound.org/people/tarane468/sounds/469689/
+    simmons-cymbal-2.wav     #469690 by tarane468  "Simmons Drums (39).wav"  https://freesound.org/people/tarane468/sounds/469690/
+    simmons-noise-1.wav      #469691 by tarane468  "Simmons Drums (6).wav"  https://freesound.org/people/tarane468/sounds/469691/
+    simmons-noise-2.wav      #469692 by tarane468  "Simmons Drums (5).wav"  https://freesound.org/people/tarane468/sounds/469692/
+    simmons-perc.wav         #469693 by tarane468  "Simmons Drums (8).wav"  https://freesound.org/people/tarane468/sounds/469693/
+    simmons-noise-3.wav      #469694 by tarane468  "Simmons Drums (7).wav"  https://freesound.org/people/tarane468/sounds/469694/
+    typewriter-160678.wav    #160678 by BMacZero  "typewriter.wav"  https://freesound.org/people/BMacZero/sounds/160678/
+    typewriter-641243.wav    #641243 by CaptainYulef  "keypress.wav"  https://freesound.org/people/CaptainYulef/sounds/641243/
+    calculator-425187.wav    #425187 by MAbdurrahman  "calculatorClick.wav"  https://freesound.org/people/MAbdurrahman/sounds/425187/
+    calculator-841391.wav    #841391 by hanasmusic  "Calculator_Button_1_Click"  https://freesound.org/people/hanasmusic/sounds/841391/
+    relay-740252.wav         #740252 by JoontheFloof  "Relay 2"  https://freesound.org/people/JoontheFloof/sounds/740252/
+    relay-384701.wav         #384701 by bassmosphere  "Relay and loud click"  https://freesound.org/people/bassmosphere/sounds/384701/
+    relay-674028.wav         #674028 by mmmtoop  "230104-034_normalized_robot_relay_click.wav"  https://freesound.org/people/mmmtoop/sounds/674028/
+
+kenney/  — Kenney "Digital Audio" (CC0 1.0), Kenney Vleugels, https://kenney.nl/assets/digital-audio
+  laser1, laser4, zap1, zap2, twoTone1, threeTone1, zapThreeToneUp, phaserDown1, tone1, lowRandom (.ogg → WAV 44.1kHz, 최대 1초)
+
+karoryfer/  — Karoryfer Samples "Caveman Cosmonaut" (CC0 1.0) commit 9de9bcfcbc6d2b20bea5c1116cd07a310febc339
+  https://github.com/sfzinstruments/karoryfer.caveman-cosmonaut  22.05kHz, 1.5초
+    organ-c4.wav        Samples/all_all_all_c4.wav
+    organ-g4.wav        Samples/all_all_all_g4.wav
+    organ-flute-c5.wav  Samples/flutes_c5.wav
+    organ-bass-c3.wav   Samples/bass_8_c3.wav
+
+nasa/  — Source: NASA/JPL-Caltech (InSight). NASA 미디어 지침에 따라 사용하며 NASA의 보증을 뜻하지 않는다.
+  https://www.nasa.gov/sounds-from-beyond/ → Cropped-Dinks-and-Donks-sample.wav 에서 1.5초씩 두 구간 (95.97s, 114.38s)
+  NASA content is generally not subject to copyright in the US; no NASA endorsement implied. 22.05kHz.
+
+commons/  — Wikimedia Commons "Dial up modem noises.ogg" (Public domain, William Termini)
+  https://commons.wikimedia.org/wiki/File:Dial_up_modem_noises.ogg  14~16초 구간 발췌, 22.05kHz.

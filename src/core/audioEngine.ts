@@ -958,7 +958,8 @@ async function buildRig(
   const ctx = new OfflineAudioContext(2, totalSamples, sampleRate);
   if (onProgress) attachProgress(ctx, duration, onProgress);
 
-  const bank = await loadSampleBank(ctx);
+  const track = deriveTrack(pattern);
+  const bank = await loadSampleBank(ctx, track.kit);
   const mix = buildMix(ctx, tempo, cutoffToFrequency(liveControls?.filterCutoff ?? 1));
   const noise = makeNoiseBuffer(ctx, pattern.seedHash, 1);
 
@@ -1006,7 +1007,7 @@ async function buildRig(
     strips,
     bank,
     pattern,
-    track: deriveTrack(pattern),
+    track,
     layers: resolveLayers(pattern, override),
     noise,
     stepDur: secondsPerStep(tempo),
