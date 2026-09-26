@@ -7,7 +7,7 @@
     "inputPlaceholder": "SEED",
     "randomButton": "Generate a random seed",
     "traitsHeading": "Pick a mood (optional)",
-    "generateButton": "Generate track"
+    "generateButton": "Generate"
   },
   "traits": {
     "bassEmphasis": "Bass emphasis",

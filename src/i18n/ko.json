@@ -7,7 +7,7 @@
     "inputPlaceholder": "SEED",
     "randomButton": "무작위로 만들기",
     "traitsHeading": "성향을 골라보세요 (선택)",
-    "generateButton": "생성하기"
+    "generateButton": "생성"
   },
   "traits": {
     "bassEmphasis": "베이스 강조",
