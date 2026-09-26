@@ -6,7 +6,17 @@ import type { CrosshairControl } from "./crosshairControl";
 import type { VoiceId } from "./voices";
 import { loadSampleBank, type SampleBank, type SampleId } from "./samples";
 import { buildArrangement, type Arrangement, type Section } from "./arrangement";
-import { cueActiveAtStep, cueFor, fillSteps, rateAt, rateStepActive, semitoneShift, type LayerCue, type LayerId } from "./blueprint";
+import {
+  cueActiveAtStep,
+  cueFor,
+  fillSteps,
+  rateAt,
+  rateStepActive,
+  semitoneShift,
+  type BlueprintId,
+  type LayerCue,
+  type LayerId,
+} from "./blueprint";
 import { blueprintById, legacyCue } from "./blueprints/legacy";
 import { targetSecondsFor } from "./genome";
 import {
@@ -14,6 +24,7 @@ import {
   computeRiff,
   computeScale,
   familyDrumHit,
+  fourFloorGhostStep,
   metropolisBass,
   metropolisScale,
   metropolisSeq,
@@ -788,14 +799,22 @@ export function scheduleBar(
       // compute/metropolis: 드럼 계열이 킥/lowDrum/tick의 on-off를 정한다(§16.4). 소리는
       // 합성 킷(circuit/skyline, §14.2 K)의 킥 원샷을 세 역할 다 재사용한다 — 역할별
       // 음색은 §11 단계 6 청취 후 다듬는다.
+      const sample = rig.synthKit ? rig.synthKit.kick : bank[track.kick];
       if (familyHit.mask[step]) {
-        const sample = rig.synthKit ? rig.synthKit.kick : bank[track.kick];
         playHit(familyHit.role, sample, time, 0.9 + 0.1 * intensity);
         if (familyHit.role !== "tick") {
           const depth = 0.34 + 0.24 * (1 - intensity);
           mix.sidechain.gain.setValueAtTime(depth, time);
           mix.sidechain.gain.linearRampToValueAtTime(1, time + Math.min(0.22, stepDur * 2.4));
         }
+      } else if (
+        isCompute &&
+        section.drumFamily === "fourFloor" &&
+        step === fourFloorGhostStep(pattern.genome.drumVariant)
+      ) {
+        // compute B계열 고스트 킥(§16.4 표 비트7): 정규 스텝보다 낮은 세기로, 사이드체인은
+        // 안 건드린다(펌핑까지 하면 정규 킥처럼 들려서 "고스트"라는 뜻이 없어진다).
+        playHit(familyHit.role, sample, time, 0.3);
       }
     } else if (cueActiveAtStep(section, "kick", sectionBar, step)) {
       const doubled = section.id.startsWith("build") && isLastBar && step % 2 === 0;
@@ -1217,16 +1236,28 @@ const PREVIEW_SECTION: Section = {
   filter: { from: 18000, to: 18000 },
 };
 
+// compute/metropolis는 각자 원곡에서 "피크에 해당하는" 실제 섹션을 미리듣기로 쓴다(§16.4) —
+// legacy용 합성 PREVIEW_SECTION 하나로는 두 계열 고유의 드럼 계열·리프·베이스가 전혀
+// 안 드러난다. 없으면(legacy 3종) 기존 합성 섹션으로 대체된다.
+const PREVIEW_SECTION_ID: Partial<Record<BlueprintId, string>> = {
+  compute: "bGroove",
+  metropolis: "mainA2",
+};
+
 export async function renderLoopBuffer(pattern: Pattern, options: RenderOptions = {}): Promise<AudioBuffer> {
   const tempo = options.liveControls?.tempo ?? pattern.tempo;
   const duration = loopDurationSeconds(tempo);
   const { ctx, rig } = await buildRig(pattern, { ...options, onProgress: undefined }, duration);
 
-  rig.mix.tone.frequency.value = PREVIEW_SECTION.filter.from;
+  const blueprint = blueprintById(pattern.blueprintId);
+  const previewId = PREVIEW_SECTION_ID[pattern.blueprintId];
+  const realSection = previewId ? blueprint.sections.find((s) => s.id === previewId) : undefined;
+  const section: Section = realSection ? { ...realSection, startBar: 0 } : PREVIEW_SECTION;
+
+  rig.mix.tone.frequency.value = section.filter.from;
   rig.mix.master.gain.value = 0.85;
   const rng = mulberry32((pattern.seedHash ^ 0x9e3779b1) >>> 0);
-  const swing = blueprintById(pattern.blueprintId).swing;
-  scheduleBar(rig, PREVIEW_SECTION, 0, 0, 0, rng, swing);
+  scheduleBar(rig, section, 0, 0, 0, rng, blueprint.swing);
 
   rig.drums.connect();
   return normalize(await ctx.startRendering());
