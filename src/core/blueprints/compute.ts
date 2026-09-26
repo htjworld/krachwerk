@@ -37,13 +37,14 @@ export const compute: Blueprint = {
   tempoRange: [114, 129],
   swing: 0,
   sections: [
-    // 1. callIntro (0–3): 드럼 없음, calls만.
+    // 1. callIntro (0–3): 드럼 없음, calls만. 시그니처 사운드(§15.2)는 마지막 마디.
     section({
       id: "callIntro",
       bars: 4,
       intensity: 0.15,
       drumFamily: "none",
       cues: [cue("calls")],
+      sigSlots: [3],
       filter: { from: 1200, to: 2000 },
     }),
 
@@ -84,6 +85,7 @@ export const compute: Blueprint = {
     }),
 
     // 5. bGroove (40–51): 베이스·seqRiff 진입, 햇 holes16. 2마디마다 pickup15 필.
+    //    시그니처 사운드는 5·7번째 마디(§15.2).
     section({
       id: "bGroove",
       bars: 8,
@@ -91,6 +93,7 @@ export const compute: Blueprint = {
       drumFamily: "fourFloor",
       cues: [cue("kick"), cue("backbeat"), hatCue([{ atBar: 0, density: HAT_DENSITY_HOLES16 }]), cue("bass"), cue("seqRiff")],
       fill: [{ everyBars: 2, kind: "pickup15", atBarInCycle: 1 }],
+      sigSlots: [4, 6],
       filter: { from: 6000, to: 11000 },
     }),
 
@@ -106,7 +109,7 @@ export const compute: Blueprint = {
       filter: { from: OPEN, to: OPEN },
     }),
 
-    // 7. stop (56): 첫 박만.
+    // 7. stop (56): 첫 박만. 시그니처 사운드 자리(§15.2).
     section({
       id: "stop",
       bars: 1,
@@ -114,6 +117,7 @@ export const compute: Blueprint = {
       drumFamily: "none",
       cues: [],
       endFill: "stop",
+      sigSlots: [0],
       filter: { from: 2000, to: 2000 },
     }),
 
@@ -150,7 +154,16 @@ export const compute: Blueprint = {
       cues: [cue("kick"), cue("backbeat"), hatCue([{ atBar: 0, density: HAT_DENSITY_HOLES16 }]), cue("bass", { window: [0, 0] })],
       filter: { from: OPEN, to: OPEN },
     }),
-    section({ id: "stop2", bars: 1, intensity: 0.2, drumFamily: "none", cues: [], endFill: "stop", filter: { from: 2000, to: 2000 } }),
+    section({
+      id: "stop2",
+      bars: 1,
+      intensity: 0.2,
+      drumFamily: "none",
+      cues: [],
+      endFill: "stop",
+      sigSlots: [0],
+      filter: { from: 2000, to: 2000 },
+    }),
     section({
       id: "roll2",
       bars: 1,
@@ -234,7 +247,16 @@ export const compute: Blueprint = {
       filter: { from: OPEN, to: OPEN },
     }),
 
-    // 17. end (184–188): 정지 + 꼬리.
-    section({ id: "end", bars: 2, intensity: 0.15, drumFamily: "none", cues: [], endFill: "stop", filter: { from: 2000, to: 800 } }),
+    // 17. end (184–188): 정지 + 꼬리. 시그니처 사운드로 마무리(§15.2).
+    section({
+      id: "end",
+      bars: 2,
+      intensity: 0.15,
+      drumFamily: "none",
+      cues: [],
+      endFill: "stop",
+      sigSlots: [0],
+      filter: { from: 2000, to: 800 },
+    }),
   ],
 };

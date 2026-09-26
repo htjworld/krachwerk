@@ -61,6 +61,7 @@ export const metropolis: Blueprint = {
       synthWidth: 1,
       drumFamily: "pulse2",
       cues: [cue("tick"), cue("pad"), cue("glide"), cue("bass", { window: [0, 0] })],
+      sigSlots: [4],
       filter: { from: 1200, to: 2000 },
     }),
 
@@ -129,6 +130,7 @@ export const metropolis: Blueprint = {
         { atBar: 6, atStep: 8, semitones: 2 }, // 마찬가지로 shifts[1]
         { atBar: 8, atStep: 8, semitones: 0 },
       ],
+      sigSlots: [4, 12],
       filter: { from: 4500, to: 7000 },
     }),
 
@@ -168,6 +170,7 @@ export const metropolis: Blueprint = {
       drumFamily: "halfTime",
       cues: [cue("kick"), hatCue([{ atBar: 0, density: 20 }]), cue("seqRiff"), cue("lead"), cue("pad")],
       harmony: [{ atBar: 0, atStep: 0, semitones: 0 }],
+      sigSlots: [6],
       filter: { from: 3000, to: 6000 },
     }),
 
@@ -237,6 +240,7 @@ export const metropolis: Blueprint = {
       synthWidth: 0.7,
       drumFamily: "none",
       cues: [cue("pad")],
+      sigSlots: [0],
       filter: { from: 1200, to: 700 },
     }),
   ],

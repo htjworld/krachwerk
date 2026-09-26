@@ -124,6 +124,8 @@ export interface BlueprintSection {
   gainDb?: number;
   /** 신스 스테레오 폭 0~1 (1 = 아주 넓음). metropolis 인트로·브레이크 1, 메인 0.4 */
   synthWidth?: number;
+  /** 시그니처 사운드(§15.2)가 한 번씩 울리는 섹션-로컬 마디 인덱스. compute/metropolis만 쓴다. */
+  sigSlots?: number[];
 }
 
 export type BlueprintId = "compute" | "metropolis" | "classicBuild" | "slowBurn" | "doubleDrop";

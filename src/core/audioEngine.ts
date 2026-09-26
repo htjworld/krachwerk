@@ -1,5 +1,5 @@
 import { degreeToMidi, midiToFrequency, type Scale } from "./scales";
-import { mulberry32 } from "./prng";
+import { mulberry32, pick } from "./prng";
 import { STEP_COUNT, type Pattern, type StepCell } from "./pattern";
 import { resolveLayers, type PatternOverride, type ResolvedLayers } from "./patternOverride";
 import type { CrosshairControl } from "./crosshairControl";
@@ -21,6 +21,7 @@ import {
 } from "./motifs";
 import { deriveTrack, type Track } from "./track";
 import { loadVoiceForCode, type VoiceLang } from "./voiceBank";
+import { loadSigSample, type SigSampleKind } from "./sigBank";
 
 export function secondsPerStep(tempo: number): number {
   return 60 / tempo / 4;
@@ -77,6 +78,43 @@ function makeImpulse(ctx: BaseAudioContext, seconds: number, decay: number): Aud
     for (let i = 0; i < length; i++) {
       data[i] = (rng() * 2 - 1) * Math.pow(1 - i / length, decay);
     }
+  }
+  return buffer;
+}
+
+// 시그니처 사운드(§15.2) S2: 우주 교신음(Quindar 톤). 2525Hz 250ms → 2475Hz 250ms.
+function makeQuindarBuffer(ctx: BaseAudioContext): AudioBuffer {
+  const seconds = 0.5;
+  const length = Math.round(ctx.sampleRate * seconds);
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  const half = Math.round(length / 2);
+  const fadeSamples = Math.round(ctx.sampleRate * 0.006);
+  for (let i = 0; i < length; i++) {
+    const freq = i < half ? 2525 : 2475;
+    const t = i / ctx.sampleRate;
+    const fadeIn = Math.min(1, i / fadeSamples);
+    const fadeOut = Math.min(1, (length - i) / fadeSamples);
+    data[i] = Math.sin(2 * Math.PI * freq * t) * 0.6 * fadeIn * fadeOut;
+  }
+  return buffer;
+}
+
+// 시그니처 사운드 S3: 금속 벨 "클링". FM 6배음(Tone.js MetalSynth 발상, 비율만 참고).
+// 비율을 시드로 살짝 흔들어서 곡마다 음색이 조금씩 다르다.
+function makeBellBuffer(ctx: BaseAudioContext, seedHash: number): AudioBuffer {
+  const seconds = 1.2;
+  const length = Math.round(ctx.sampleRate * seconds);
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  const rng = mulberry32((seedHash ^ 0x00b3117) >>> 0);
+  const ratios = [1, 1.483, 1.932, 2.546, 2.63, 3.897].map((r) => r * (0.94 + rng() * 0.12));
+  const base = 480;
+  for (let i = 0; i < length; i++) {
+    const t = i / ctx.sampleRate;
+    let v = 0;
+    for (const r of ratios) v += Math.sin(2 * Math.PI * base * r * t) * Math.exp(-t * (2 + r));
+    data[i] = (v / ratios.length) * 0.7;
   }
   return buffer;
 }
@@ -183,7 +221,7 @@ function buildMix(ctx: BaseAudioContext, tempo: number, liveCutoffHz: number): M
 
 // ---------------------------------------------------------------- 드럼 (JS 믹싱)
 
-export type DrumRole = "kick" | "hat" | "openHat" | "backbeat" | "perc" | "metal" | "lowDrum" | "tick" | "calls";
+export type DrumRole = "kick" | "hat" | "openHat" | "backbeat" | "perc" | "metal" | "lowDrum" | "tick" | "calls" | "sig";
 
 interface DrumVoiceSpec {
   level: number;
@@ -205,6 +243,8 @@ const DRUM_VOICES: Record<DrumRole, DrumVoiceSpec> = {
   tick: { level: 0.6, pan: 0, send: 0.05 },
   // 로봇 목소리가 시드 코드를 읽는다(§15.2 S1).
   calls: { level: 0.8, pan: 0, send: 0.3 },
+  // 시그니처 사운드(§15.2 S2~S6). 킥 사이드체인 안 받는다 — KICK_BUS_ROLES에 없다.
+  sig: { level: 0.6, pan: 0, send: 0.35 },
 };
 
 const KICK_BUS_ROLES: readonly DrumRole[] = ["kick", "lowDrum"];
@@ -659,6 +699,9 @@ export interface Rig {
   motifBass: { cells: StepCell[]; gateBeats: number | null } | null;
   /** 로봇 목소리(§15.2 S1). "calls" 큐가 있는 블루프린트(compute)만 채운다. */
   voiceBank: Map<string, AudioBuffer> | null;
+  /** 시그니처 사운드(§15.2 S2~S6). 곡 하나에 하나만 고른다 — sigSlots가 있는 블루프린트
+   *  (compute/metropolis)만 채운다. */
+  sigBuffer: AudioBuffer | null;
 }
 
 export function scheduleBar(
@@ -708,6 +751,11 @@ export function scheduleBar(
     const char = code[barIndex % code.length];
     const buf = rig.voiceBank.get(char);
     if (buf) drums.hit("calls", buf, barStart, 0.8);
+  }
+
+  // 시그니처 사운드(§15.2): 블루프린트가 정한 마디에서 한 번, 곡 전체에서 고른 S2~S6 소리로.
+  if (rig.sigBuffer && section.sigSlots?.includes(sectionBar)) {
+    drums.hit("sig", rig.sigBuffer, barStart, 0.7);
   }
 
   for (let step = 0; step < STEP_COUNT; step++) {
@@ -992,6 +1040,18 @@ async function buildRig(
   const voiceLang: VoiceLang = pattern.seedHash % 2 === 0 ? "de" : "en";
   const voiceBank = pattern.blueprintId === "compute" ? await loadVoiceForCode(ctx, voiceLang, pattern.seedInput) : null;
 
+  // 시그니처 사운드(§15.2): sigSlots가 있는 compute/metropolis만, 곡 하나당 S2~S6 중 하나.
+  // (S1 로봇 목소리는 이미 위 voiceBank/"calls" 큐가 맡는다.)
+  const usesSig = pattern.blueprintId === "compute" || pattern.blueprintId === "metropolis";
+  let sigBuffer: AudioBuffer | null = null;
+  if (usesSig) {
+    const sigRng = mulberry32((pattern.seedHash ^ 0x51617) >>> 0);
+    const kind = pick(sigRng, ["quindar", "bell", "mech", "modem", "space"] as const);
+    if (kind === "quindar") sigBuffer = makeQuindarBuffer(ctx);
+    else if (kind === "bell") sigBuffer = makeBellBuffer(ctx, pattern.seedHash);
+    else sigBuffer = await loadSigSample(ctx, kind as SigSampleKind, Math.floor(sigRng() * 7));
+  }
+
   const rig: Rig = {
     ctx,
     mix,
@@ -1015,6 +1075,7 @@ async function buildRig(
     motifRiff,
     motifBass,
     voiceBank,
+    sigBuffer,
   };
 
   return { ctx, rig };

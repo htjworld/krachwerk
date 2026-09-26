@@ -31,4 +31,15 @@ describe.each([
       expect(arrangement.totalSeconds).toBeLessThan(targetSeconds + 15);
     }
   });
+
+  it("sigSlots(시그니처 사운드, §15.2)가 최소 하나 있고 전부 그 섹션 마디 수 안에 있다", () => {
+    const sections = blueprint.sections.filter((s) => s.sigSlots && s.sigSlots.length > 0);
+    expect(sections.length).toBeGreaterThan(0);
+    for (const section of sections) {
+      for (const bar of section.sigSlots!) {
+        expect(bar).toBeGreaterThanOrEqual(0);
+        expect(bar).toBeLessThan(section.bars);
+      }
+    }
+  });
 });
