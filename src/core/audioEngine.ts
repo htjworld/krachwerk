@@ -741,7 +741,7 @@ export function scheduleBar(
   const withShift = (freq: number, step: number) => freq * 2 ** (semitones(step) / 12);
 
   if (sectionBar === 0 && intensity > 0.28) {
-    drums.hit("metal", bank.cymbal, barStart, 0.5);
+    drums.hit("metal", bank[track.cymbal], barStart, 0.5);
   }
 
   // 로봇 목소리(§15.2 S1): 마디마다 시드 코드 한 글자씩, 순서대로. 스텝 단위가 아니라
@@ -794,11 +794,11 @@ export function scheduleBar(
     const hatCue = cueActiveAtStep(section, "hat", sectionBar, step);
     if (hatCue && step < hatCutFrom && cueStepActive(hatCue, sectionBar, step)) {
       const level = (downbeat ? 0.55 : step % 2 === 0 ? 0.4 : 0.24) * accent;
-      drums.hit("hat", bank.hatClosed, time, level, 0.95 + rng() * 0.12);
+      drums.hit("hat", bank[track.hat], time, level, 0.95 + rng() * 0.12);
     }
 
     if (cueActiveAtStep(section, "openHat", sectionBar, step) && step % 4 === 2) {
-      drums.hit("openHat", bank[step % 8 === 6 ? "hatOpenLong" : "hatOpen"], time, 0.42);
+      drums.hit("openHat", bank[step % 8 === 6 ? track.hatOpenLong : track.hatOpen], time, 0.42);
     }
 
     if (cueActiveAtStep(section, "perc", sectionBar, step) && track.percSteps[step]) {

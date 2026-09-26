@@ -29,6 +29,28 @@ const SHAKERS_BY_KIT: Record<string, SampleId[]> = {
   "legacy-uzu": ["uzuSh1", "uzuTb1", "uzuCb1"],
   "legacy-simmons": ["freesoundSimmonsPerc", "freesoundSimmonsNoise1", "freesoundSimmonsNoise2", "freesoundSimmonsNoise3"],
 };
+const HATS_BY_KIT: Record<string, SampleId[]> = {
+  core: ["hatClosed"],
+  "legacy-uzu": ["uzuHh1", "uzuHh2", "uzuHh3", "uzuHh4", "uzuHh5"],
+  "legacy-simmons": ["freesoundSimmonsHatClosed"],
+};
+const OPEN_HATS_BY_KIT: Record<string, SampleId[]> = {
+  core: ["hatOpen"],
+  "legacy-uzu": ["uzuOh1", "uzuOh2", "uzuOh3", "uzuOh4"],
+  "legacy-simmons": ["freesoundSimmonsHatOpen"],
+};
+// core만 "8마디마다 한 번 더 긴 오픈햇"이 실제로 다른 파일이다(hatOpenLong). 나머지 킷은
+// 오픈햇 후보가 하나뿐이거나(심몬스) 그 자리도 그냥 한 번 더 고른다(uzu).
+const OPEN_HAT_LONGS_BY_KIT: Record<string, SampleId[]> = {
+  core: ["hatOpenLong"],
+  "legacy-uzu": OPEN_HATS_BY_KIT["legacy-uzu"],
+  "legacy-simmons": ["freesoundSimmonsHatOpen"],
+};
+const CYMBALS_BY_KIT: Record<string, SampleId[]> = {
+  core: ["cymbal"],
+  "legacy-uzu": ["uzuCr1", "uzuCr2", "uzuRd1"],
+  "legacy-simmons": ["freesoundSimmonsCymbal1", "freesoundSimmonsCymbal2"],
+};
 const METALS: SampleId[] = [
   "anvil1",
   "anvil2",
@@ -48,6 +70,10 @@ export interface Track {
   kick: SampleId;
   backbeat: SampleId;
   shaker: SampleId;
+  hat: SampleId;
+  hatOpen: SampleId;
+  hatOpenLong: SampleId;
+  cymbal: SampleId;
   metalA: SampleId;
   metalB: SampleId;
   /** 셰이커/퍼커션이 들어가는 16스텝. §11 단계 5부터 게놈 drumVariant의 유클리드 패턴이다. */
@@ -116,6 +142,10 @@ export function deriveTrack(pattern: Pattern): Track {
     kick: pick(rng, KICKS_BY_KIT[kitKey]),
     backbeat: pick(rng, BACKBEATS_BY_KIT[kitKey]),
     shaker: pick(rng, SHAKERS_BY_KIT[kitKey]),
+    hat: pick(rng, HATS_BY_KIT[kitKey]),
+    hatOpen: pick(rng, OPEN_HATS_BY_KIT[kitKey]),
+    hatOpenLong: pick(rng, OPEN_HAT_LONGS_BY_KIT[kitKey]),
+    cymbal: pick(rng, CYMBALS_BY_KIT[kitKey]),
     metalA,
     metalB,
     percSteps: legacyPercSteps(drumVariant),
