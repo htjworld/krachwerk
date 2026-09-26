@@ -32,15 +32,15 @@ function AppContent() {
   const [receivedLocalKit, setReceivedLocalKit] = useState(false);
 
   useEffect(() => {
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (!meta || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const colors = ["#cccccc", "#75fb4c"];
+    // kraftwerk.com/KKM/kkm.html 원본 그대로: body 배경색을 5초마다 직접 바꾼다.
+    // 사파리는 이 body 배경색을 탭바/툴바 색으로 그대로 반영한다.
+    const colors = ["#cccccc", "#00ff00"];
+    document.body.style.backgroundColor = colors[0];
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     let i = 0;
-    meta.setAttribute("content", colors[0]);
-    // .ambient-bg의 10s step-end 애니메이션과 같은 5초 간격으로 브라우저 크롬(사파리 탭바 등) 색을 맞춘다.
     const id = setInterval(() => {
       i = (i + 1) % colors.length;
-      meta.setAttribute("content", colors[i]);
+      document.body.style.backgroundColor = colors[i];
     }, 5000);
     return () => clearInterval(id);
   }, []);

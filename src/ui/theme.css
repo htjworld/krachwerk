@@ -2,8 +2,6 @@
   --bg-device: #0d1117;
   --fg-device: #75fb4c;
   --fg-device-dim: #5bc43b;
-  --bg-ambient-a: #cccccc;
-  --bg-ambient-b: #75fb4c;
   --accent-blue: #58a6ff;
   --panel: #21262d;
   --playhead: #3a3a3a;
@@ -39,24 +37,10 @@ button {
   align-items: center;
   justify-content: center;
   padding: 24px 16px;
-  /* step-end라 크로스페이드 없이 5초마다 딱딱 끊어서 바뀐다. */
-  animation: krachwerk-ambient 10s step-end infinite;
-}
-
-@keyframes krachwerk-ambient {
-  0% {
-    background-color: var(--bg-ambient-a);
-  }
-  50% {
-    background-color: var(--bg-ambient-b);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ambient-bg {
-    animation: none;
-    background-color: var(--bg-ambient-a);
-  }
+  /* 실제 배경색은 App.tsx에서 document.body.style.backgroundColor를 5초마다 직접 바꾼다
+     (사파리가 body 배경색을 탭바 색으로 그대로 반영하기 때문). 이 div는 투명하게 둬서
+     비친다. */
+  background-color: transparent;
 }
 
 .device-stack {
