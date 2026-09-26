@@ -340,3 +340,48 @@ button {
   gap: 8px;
   margin-top: 16px;
 }
+
+.userkit-dropzone {
+  border: 1px dashed var(--fg-device-dim);
+  border-radius: 8px;
+  padding: 20px 12px;
+  text-align: center;
+  font-size: 0.85em;
+  color: var(--fg-device-dim);
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+
+.userkit-dropzone:hover {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.userkit-file-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.userkit-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.userkit-file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85em;
+}
+
+.userkit-file-row .device-input {
+  width: auto;
+  padding: 4px 8px;
+  font-size: 0.85em;
+}

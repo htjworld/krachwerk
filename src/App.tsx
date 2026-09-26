@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { I18nProvider } from "./i18n/i18n";
 import { SeedScreen } from "./ui/SeedScreen";
 import { ResultScreen } from "./ui/ResultScreen";
@@ -11,7 +11,16 @@ import {
   randomSeedCandidate,
   type PatternOverride,
   type CrosshairControl,
+  type UserSlot,
 } from "./core";
+import {
+  listFiles,
+  addFile,
+  removeFile,
+  updateSlot,
+  clearAll,
+  type UserKitFile,
+} from "./core/userKitStore";
 import { restoreRedirectedPath, readRoute, pushRoute, replaceRoute, buildSeedUrl, type RouteParams } from "./routing";
 import "./ui/theme.css";
 
@@ -19,6 +28,8 @@ function AppContent() {
   const [seed, setSeed] = useState<string | null>(null);
   const [override, setOverride] = useState<PatternOverride | null>(null);
   const [crosshair, setCrosshair] = useState<CrosshairControl | null>(null);
+  const [userKitFiles, setUserKitFiles] = useState<UserKitFile[]>([]);
+  const [receivedLocalKit, setReceivedLocalKit] = useState(false);
 
   useEffect(() => {
     restoreRedirectedPath();
@@ -28,11 +39,41 @@ function AppContent() {
       setOverride(route.pattern ? decodePatternOverride(route.pattern) : null);
       setCrosshair(route.crosshair ? decodeCrosshairControl(route.crosshair) : null);
     }
+    setReceivedLocalKit(route.kit === "local");
+    void listFiles().then(setUserKitFiles);
   }, []);
+
+  // 슬롯별로 묶은 원본 ArrayBuffer 목록 — 렌더링 엔진에 그대로 넘긴다(§15.4).
+  const userKit = useMemo<Partial<Record<UserSlot, ArrayBuffer[]>> | null>(() => {
+    if (userKitFiles.length === 0) return null;
+    const map: Partial<Record<UserSlot, ArrayBuffer[]>> = {};
+    for (const file of userKitFiles) {
+      (map[file.slot] ??= []).push(file.data);
+    }
+    return map;
+  }, [userKitFiles]);
+
+  const handleAddUserKitFiles = (files: UserKitFile[]) => {
+    files.forEach((file) => void addFile(file));
+    setUserKitFiles((prev) => [...prev, ...files]);
+  };
+  const handleRemoveUserKitFile = (id: string) => {
+    void removeFile(id);
+    setUserKitFiles((prev) => prev.filter((f) => f.id !== id));
+  };
+  const handleUpdateUserKitSlot = (id: string, slot: UserSlot) => {
+    void updateSlot(id, slot);
+    setUserKitFiles((prev) => prev.map((f) => (f.id === id ? { ...f, slot } : f)));
+  };
+  const handleClearUserKit = () => {
+    void clearAll();
+    setUserKitFiles([]);
+  };
 
   const routeParams = (nextOverride: PatternOverride | null, nextCrosshair: CrosshairControl | null): RouteParams => ({
     pattern: nextOverride ? encodePatternOverride(nextOverride) : null,
     crosshair: nextCrosshair ? encodeCrosshairControl(nextCrosshair) : null,
+    kit: userKitFiles.length > 0 ? "local" : null,
   });
 
   const handleGenerate = (newSeed: string) => {
@@ -95,6 +136,13 @@ function AppContent() {
           onShuffle={handleShuffle}
           onShare={handleShare}
           onBackToSeed={handleBackToSeed}
+          userKitFiles={userKitFiles}
+          userKit={userKit}
+          onAddUserKitFiles={handleAddUserKitFiles}
+          onRemoveUserKitFile={handleRemoveUserKitFile}
+          onUpdateUserKitSlot={handleUpdateUserKitSlot}
+          onClearUserKit={handleClearUserKit}
+          receivedLocalKit={receivedLocalKit}
         />
       </div>
     </div>

@@ -23,28 +23,38 @@ export interface RouteState {
   seed: string | null;
   pattern: string | null;
   crosshair: string | null;
+  /** "local"이면 보낸 사람이 내 소리(§15.4)를 켜 두고 공유한 링크다. 받는 쪽은 기본 킷으로만
+   *  렌더링한다 — 개인 파일은 링크에 담기지 않는다. */
+  kit: "local" | null;
 }
 
 export interface RouteParams {
   pattern?: string | null;
   crosshair?: string | null;
+  kit?: "local" | null;
 }
 
 export function readRoute(): RouteState {
-  if (typeof window === "undefined") return { seed: null, pattern: null, crosshair: null };
+  if (typeof window === "undefined") return { seed: null, pattern: null, crosshair: null, kit: null };
   const { pathname, search } = window.location;
   const trimmedBase = BASE_PATH.endsWith("/") ? BASE_PATH.slice(0, -1) : BASE_PATH;
   let rest = pathname.startsWith(trimmedBase) ? pathname.slice(trimmedBase.length) : pathname;
   rest = rest.replace(/^\/+/, "");
   const seed = rest.length > 0 ? decodeURIComponent(rest) : null;
   const params = new URLSearchParams(search);
-  return { seed, pattern: params.get("pattern"), crosshair: params.get("crosshair") };
+  return {
+    seed,
+    pattern: params.get("pattern"),
+    crosshair: params.get("crosshair"),
+    kit: params.get("kit") === "local" ? "local" : null,
+  };
 }
 
 function buildQuery(params?: RouteParams): string {
   const query = new URLSearchParams();
   if (params?.pattern) query.set("pattern", params.pattern);
   if (params?.crosshair) query.set("crosshair", params.crosshair);
+  if (params?.kit) query.set("kit", params.kit);
   const str = query.toString();
   return str ? `?${str}` : "";
 }

@@ -35,7 +35,25 @@
     "previewMode": "편집하는 동안은 한 마디만 반복해서 들려줘요",
     "editPattern": "패턴 보기/편집하기",
     "liveControl": "라이브 컨트롤",
-    "newSeed": "다른 시드로 돌아가기"
+    "userKit": "내 소리",
+    "newSeed": "다른 시드로 돌아가기",
+    "receivedLocalKit": "보낸 사람의 개인 소리는 포함되지 않았어요"
+  },
+  "userKit": {
+    "title": "내 소리",
+    "notice": "직접 녹음했거나 쓸 권리가 있는 소리만 넣어 주세요. 파일은 이 브라우저에만 저장되고 어디에도 올라가지 않아요.",
+    "notPersistent": "이 브라우저에서는 새로고침하면 사라져요",
+    "dropHint": "여기로 끌어놓거나 눌러서 소리 파일을 골라주세요",
+    "loading": "불러오는 중",
+    "reset": "기본 소리로",
+    "remove": "지우기",
+    "slot": {
+      "kick": "킥",
+      "snare": "스네어",
+      "hat": "햇",
+      "perc": "퍼커션",
+      "sig": "시그니처"
+    }
   },
   "matrix": {
     "drumTab": "DRUM",

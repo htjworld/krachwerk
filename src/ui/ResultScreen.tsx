@@ -9,10 +9,13 @@ import {
   type Pattern,
   type PatternOverride,
   type CrosshairControl,
+  type UserSlot,
 } from "../core";
+import type { UserKitFile } from "../core/userKitStore";
 import { usePlayer, type Player } from "./usePlayer";
 import { MatrixEditor } from "./MatrixEditor";
 import { CrosshairPanel } from "./CrosshairPanel";
+import { UserKitPanel } from "./UserKitPanel";
 
 interface Props {
   pattern: Pattern;
@@ -23,6 +26,13 @@ interface Props {
   onShuffle: () => void;
   onShare: () => void;
   onBackToSeed: () => void;
+  userKitFiles: UserKitFile[];
+  userKit: Partial<Record<UserSlot, ArrayBuffer[]>> | null;
+  onAddUserKitFiles: (files: UserKitFile[]) => void;
+  onRemoveUserKitFile: (id: string) => void;
+  onUpdateUserKitSlot: (id: string, slot: UserSlot) => void;
+  onClearUserKit: () => void;
+  receivedLocalKit: boolean;
 }
 
 function formatTime(seconds: number): string {
@@ -100,23 +110,31 @@ export function ResultScreen({
   onShuffle,
   onShare,
   onBackToSeed,
+  userKitFiles,
+  userKit,
+  onAddUserKitFiles,
+  onRemoveUserKitFile,
+  onUpdateUserKitSlot,
+  onClearUserKit,
+  receivedLocalKit,
 }: Props) {
   const { t, lang, setLang } = useI18n();
   const [showMatrix, setShowMatrix] = useState(false);
   const [showCrosshair, setShowCrosshair] = useState(false);
+  const [showUserKit, setShowUserKit] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
   // 편집 패널이 열려 있는 동안은 한 마디 미리듣기로 갈아탄다 (편집 즉시 반영).
-  const mode = showMatrix || showCrosshair ? "loop" : "arrangement";
-  const player = usePlayer(pattern, override, crosshair, mode);
+  const mode = showMatrix || showCrosshair || showUserKit ? "loop" : "arrangement";
+  const player = usePlayer(pattern, override, crosshair, mode, userKit);
   const tempo = effectiveTempo(pattern, crosshair);
   const arrangement = arrangementFor(pattern, tempo);
 
   const handleDownload = async () => {
     setIsExporting(true);
     try {
-      const buffer = await renderArrangement(pattern, { override, liveControls: crosshair });
+      const buffer = await renderArrangement(pattern, { override, liveControls: crosshair, userKit });
       const url = URL.createObjectURL(encodeWav(buffer));
       const a = document.createElement("a");
       a.href = url;
@@ -193,12 +211,26 @@ export function ResultScreen({
           <button type="button" className="device-text-button" onClick={() => setShowCrosshair((v) => !v)}>
             {t("resultScreen.liveControl")}
           </button>
+          <button type="button" className="device-text-button" onClick={() => setShowUserKit((v) => !v)}>
+            {t("resultScreen.userKit")}
+          </button>
           <button type="button" className="device-text-button" onClick={onBackToSeed}>
             {t("resultScreen.newSeed")}
           </button>
         </div>
         {mode === "loop" && <p className="device-subheading">{t("resultScreen.previewMode")}</p>}
+        {receivedLocalKit && <p className="device-subheading">{t("resultScreen.receivedLocalKit")}</p>}
       </div>
+
+      {showUserKit && (
+        <UserKitPanel
+          files={userKitFiles}
+          onAddFiles={onAddUserKitFiles}
+          onRemoveFile={onRemoveUserKitFile}
+          onUpdateSlot={onUpdateUserKitSlot}
+          onClearAll={onClearUserKit}
+        />
+      )}
 
       {showMatrix && (
         <MatrixEditor

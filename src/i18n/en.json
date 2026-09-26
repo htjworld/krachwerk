@@ -35,7 +35,25 @@
     "previewMode": "While editing you hear one bar on repeat",
     "editPattern": "View / edit pattern",
     "liveControl": "Live control",
-    "newSeed": "Back to seed screen"
+    "userKit": "My sounds",
+    "newSeed": "Back to seed screen",
+    "receivedLocalKit": "The sender's personal sounds weren't included"
+  },
+  "userKit": {
+    "title": "My sounds",
+    "notice": "Only add sounds you recorded yourself or have the right to use. Files stay in this browser only — nothing is uploaded.",
+    "notPersistent": "This browser won't keep these after a reload",
+    "dropHint": "Drag sound files here, or click to choose",
+    "loading": "Loading",
+    "reset": "Reset to default sounds",
+    "remove": "Remove",
+    "slot": {
+      "kick": "Kick",
+      "snare": "Snare",
+      "hat": "Hat",
+      "perc": "Percussion",
+      "sig": "Signature"
+    }
   },
   "matrix": {
     "drumTab": "DRUM",

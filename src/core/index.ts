@@ -14,3 +14,4 @@ export * from "./track";
 export * from "./arrangement";
 export * from "./audioEngine";
 export * from "./wav";
+export * from "./userKit";

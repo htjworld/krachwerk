@@ -23,6 +23,7 @@ import { deriveTrack, type Track } from "./track";
 import { loadVoiceForCode, type VoiceLang } from "./voiceBank";
 import { loadSigSample, type SigSampleKind } from "./sigBank";
 import { loadSynthKit, type SynthKit } from "./drumSynth";
+import { ROLE_TO_USER_SLOT, USER_SLOTS, type UserSlot } from "./userKit";
 
 export function secondsPerStep(tempo: number): number {
   return 60 / tempo / 4;
@@ -48,6 +49,14 @@ export interface RenderOptions {
    */
   sampleRate?: number;
   onProgress?: (ratio: number) => void;
+  /**
+   * 내 소리(§15.4). 원본 ArrayBuffer로 받는다 — decodeAudioData가 컨텍스트에 따라 다른
+   * 샘플레이트로 디코딩하므로(§1.3 샘플뱅크 주석과 같은 이유), 실제 렌더링에 쓰는
+   * OfflineAudioContext로 그때그때 디코딩해야 한다(미리 디코딩해서 캐시해 두면 재생
+   * 컨텍스트와 샘플레이트가 어긋날 수 있다). 슬롯에 파일이 여러 개면 buildRig가 곡 하나
+   * 동안 고정으로 쓸 것 하나를 시드로 고른다. 슬롯이 비어 있으면 그 역할은 원래 소리를 쓴다.
+   */
+  userKit?: Partial<Record<UserSlot, ArrayBuffer[]>> | null;
 }
 
 // 성능 메모: 크롬은 오프라인 렌더링이 끝날 때까지 다 쓴 노드를 그래프에서 놓아주지 않는다.
@@ -706,6 +715,8 @@ export interface Rig {
   /** 합성 드럼 킷(§14.2 K, §15.3). compute="circuit"/metropolis="skyline". legacy는 null
    *  (코어/uzu/simmons 샘플 킷을 그대로 쓴다). */
   synthKit: SynthKit | null;
+  /** 내 소리(§15.4). 슬롯마다 곡 하나 동안 고정으로 쓸 버퍼 하나. 없으면 기본 소리 그대로. */
+  userKitBuffers: Partial<Record<UserSlot, AudioBuffer>> | null;
 }
 
 export function scheduleBar(
@@ -722,6 +733,12 @@ export function scheduleBar(
   if (section.freeTime) return;
 
   const { mix, drums, voices, stabVoices, bank, pattern, track, layers, stepDur } = rig;
+  // 내 소리(§15.4): 역할이 매핑되는 슬롯에 사용자가 채워 둔 버퍼가 있으면 그걸 대신 튼다.
+  const playHit = (role: DrumRole, sample: AudioBuffer, time: number, level: number, rate?: number) => {
+    const slot = ROLE_TO_USER_SLOT[role];
+    const override = slot ? rig.userKitBuffers?.[slot] : undefined;
+    drums.hit(role, override ?? sample, time, level, rate);
+  };
   const intensity = section.intensity;
   const isCompute = pattern.blueprintId === "compute";
   const isMetropolis = pattern.blueprintId === "metropolis";
@@ -745,7 +762,7 @@ export function scheduleBar(
   const withShift = (freq: number, step: number) => freq * 2 ** (semitones(step) / 12);
 
   if (sectionBar === 0 && intensity > 0.28) {
-    drums.hit("metal", bank[track.cymbal], barStart, 0.5);
+    playHit("metal", bank[track.cymbal], barStart, 0.5);
   }
 
   // 로봇 목소리(§15.2 S1): 마디마다 시드 코드 한 글자씩, 순서대로. 스텝 단위가 아니라
@@ -754,12 +771,12 @@ export function scheduleBar(
     const code = pattern.seedInput;
     const char = code[barIndex % code.length];
     const buf = rig.voiceBank.get(char);
-    if (buf) drums.hit("calls", buf, barStart, 0.8);
+    if (buf) playHit("calls", buf, barStart, 0.8);
   }
 
   // 시그니처 사운드(§15.2): 블루프린트가 정한 마디에서 한 번, 곡 전체에서 고른 S2~S6 소리로.
   if (rig.sigBuffer && section.sigSlots?.includes(sectionBar)) {
-    drums.hit("sig", rig.sigBuffer, barStart, 0.7);
+    playHit("sig", rig.sigBuffer, barStart, 0.7);
   }
 
   for (let step = 0; step < STEP_COUNT; step++) {
@@ -773,7 +790,7 @@ export function scheduleBar(
       // 음색은 §11 단계 6 청취 후 다듬는다.
       if (familyHit.mask[step]) {
         const sample = rig.synthKit ? rig.synthKit.kick : bank[track.kick];
-        drums.hit(familyHit.role, sample, time, 0.9 + 0.1 * intensity);
+        playHit(familyHit.role, sample, time, 0.9 + 0.1 * intensity);
         if (familyHit.role !== "tick") {
           const depth = 0.34 + 0.24 * (1 - intensity);
           mix.sidechain.gain.setValueAtTime(depth, time);
@@ -783,7 +800,7 @@ export function scheduleBar(
     } else if (cueActiveAtStep(section, "kick", sectionBar, step)) {
       const doubled = section.id.startsWith("build") && isLastBar && step % 2 === 0;
       if (layers.kick[step] || doubled || (intensity > 0.85 && step === 14 && rng() < 0.25)) {
-        drums.hit("kick", bank[track.kick], time, (doubled ? 0.75 : 1) * (0.9 + 0.1 * intensity));
+        playHit("kick", bank[track.kick], time, (doubled ? 0.75 : 1) * (0.9 + 0.1 * intensity));
         // 킥이 칠 때마다 악기 버스를 눌렀다 푼다(사이드체인 펌핑).
         const depth = 0.34 + 0.24 * (1 - intensity);
         mix.sidechain.gain.setValueAtTime(depth, time);
@@ -795,31 +812,31 @@ export function scheduleBar(
       const double = fillKind === 3 && step === 12;
       // compute는 클랩 성향(§14.2 K), metropolis는 스네어 성향 — 합성 킷에도 그대로 따른다.
       const backbeatSample = rig.synthKit ? (isCompute ? rig.synthKit.clap : rig.synthKit.snare) : bank[track.backbeat];
-      drums.hit("backbeat", backbeatSample, time, double ? 0.85 : 0.7);
-      if (double) drums.hit("backbeat", backbeatSample, at(14), 0.6);
+      playHit("backbeat", backbeatSample, time, double ? 0.85 : 0.7);
+      if (double) playHit("backbeat", backbeatSample, at(14), 0.6);
     }
 
     const hatCue = cueActiveAtStep(section, "hat", sectionBar, step);
     if (hatCue && step < hatCutFrom && cueStepActive(hatCue, sectionBar, step)) {
       const level = (downbeat ? 0.55 : step % 2 === 0 ? 0.4 : 0.24) * accent;
-      drums.hit("hat", rig.synthKit ? rig.synthKit.hat : bank[track.hat], time, level, 0.95 + rng() * 0.12);
+      playHit("hat", rig.synthKit ? rig.synthKit.hat : bank[track.hat], time, level, 0.95 + rng() * 0.12);
     }
 
     if (cueActiveAtStep(section, "openHat", sectionBar, step) && step % 4 === 2) {
-      drums.hit("openHat", bank[step % 8 === 6 ? track.hatOpenLong : track.hatOpen], time, 0.42);
+      playHit("openHat", bank[step % 8 === 6 ? track.hatOpenLong : track.hatOpen], time, 0.42);
     }
 
     if (cueActiveAtStep(section, "perc", sectionBar, step) && track.percSteps[step]) {
-      drums.hit("perc", bank[track.shaker], time, 0.3 * accent, 0.9 + rng() * 0.25);
+      playHit("perc", bank[track.shaker], time, 0.3 * accent, 0.9 + rng() * 0.25);
     }
 
     if (cueActiveAtStep(section, "metal", sectionBar, step)) {
       const hit = step === track.metalSteps[0] ? track.metalA : step === track.metalSteps[1] ? track.metalB : null;
       if (hit && rng() < 0.3 + 0.5 * intensity) {
-        drums.hit("metal", bank[hit], time, 0.4 + 0.3 * intensity, 0.85 + rng() * 0.4);
+        playHit("metal", bank[hit], time, 0.4 + 0.3 * intensity, 0.85 + rng() * 0.4);
       }
       if (barIndex % 8 === 0 && step === 0) {
-        drums.hit("metal", bank[track.metalA], time, 0.55, 0.8);
+        playHit("metal", bank[track.metalA], time, 0.55, 0.8);
       }
     }
 
@@ -917,13 +934,13 @@ export function scheduleBar(
     if (isFill && fillKind >= 0 && fillKind <= 2) {
       if (fillKind === 0) {
         const toms: SampleId[] = ["tomLow", "tomLow", "tomMid", "tomHigh"];
-        toms.forEach((tom, i) => drums.hit("perc", bank[tom], at(12 + i), 0.6 + i * 0.06));
+        toms.forEach((tom, i) => playHit("perc", bank[tom], at(12 + i), 0.6 + i * 0.06));
       } else if (fillKind === 1) {
         for (let i = 0; i < 4; i++) {
-          drums.hit("backbeat", bank.snareTight, at(12 + i), 0.3 + i * 0.12, 1 + i * 0.05);
+          playHit("backbeat", bank.snareTight, at(12 + i), 0.3 + i * 0.12, 1 + i * 0.05);
         }
       } else {
-        drums.hit("metal", bank[track.metalB], at(14), 0.6, 0.7);
+        playHit("metal", bank[track.metalB], at(14), 0.6, 0.7);
       }
     }
   } else {
@@ -932,11 +949,11 @@ export function scheduleBar(
     // kick 자리를 빌려 스텝 패턴만 검증한다.
     for (const f of section.fill) {
       if (sectionBar % f.everyBars === f.atBarInCycle) {
-        for (const step of fillSteps(f.kind)) drums.hit("kick", bank[track.kick], at(step), 1);
+        for (const step of fillSteps(f.kind)) playHit("kick", bank[track.kick], at(step), 1);
       }
     }
     if (section.endFill && isLastBar) {
-      for (const step of fillSteps(section.endFill)) drums.hit("kick", bank[track.kick], at(step), 1);
+      for (const step of fillSteps(section.endFill)) playHit("kick", bank[track.kick], at(step), 1);
     }
   }
 }
@@ -1002,12 +1019,33 @@ function attachProgress(ctx: OfflineAudioContext, duration: number, onProgress: 
   }
 }
 
+// 내 소리(§15.4): 슬롯에 파일이 여러 개면 곡 하나 동안 고정으로 쓸 것 하나를 시드로 고른다
+// (곡 안에서 안 바뀌게). 슬롯이 비어 있으면 그 슬롯은 결과에서 아예 빠진다(원래 소리 사용).
+// slice(0)로 복사해서 넘긴다 — decodeAudioData는 원본 ArrayBuffer를 분리시켜버려서, 같은
+// 저장본으로 다시 렌더링(템포 변경 등)하면 두 번째부터 디코딩이 실패한다.
+async function resolveUserKitBuffers(
+  ctx: BaseAudioContext,
+  userKit: Partial<Record<UserSlot, ArrayBuffer[]>> | null | undefined,
+  seedHash: number
+): Promise<Partial<Record<UserSlot, AudioBuffer>> | null> {
+  if (!userKit) return null;
+  const result: Partial<Record<UserSlot, AudioBuffer>> = {};
+  for (const [index, slot] of USER_SLOTS.entries()) {
+    const files = userKit[slot];
+    if (files && files.length > 0) {
+      const rng = mulberry32((seedHash ^ Math.imul(index + 1, 0x9e3779b1)) >>> 0);
+      result[slot] = await ctx.decodeAudioData(pick(rng, files).slice(0));
+    }
+  }
+  return Object.keys(result).length > 0 ? result : null;
+}
+
 async function buildRig(
   pattern: Pattern,
   options: RenderOptions,
   duration: number
 ): Promise<{ ctx: OfflineAudioContext; rig: Rig }> {
-  const { override, liveControls, onProgress } = options;
+  const { override, liveControls, onProgress, userKit } = options;
   const sampleRate = options.sampleRate || DEFAULT_SAMPLE_RATE;
   const tempo = liveControls?.tempo ?? pattern.tempo;
   const totalSamples = Math.ceil(duration * sampleRate);
@@ -1093,6 +1131,7 @@ async function buildRig(
     voiceBank,
     sigBuffer,
     synthKit,
+    userKitBuffers: await resolveUserKitBuffers(ctx, userKit, pattern.seedHash),
   };
 
   return { ctx, rig };

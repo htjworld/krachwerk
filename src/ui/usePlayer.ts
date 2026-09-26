@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { renderArrangement, renderLoopBuffer, type Pattern } from "../core";
-import type { PatternOverride, CrosshairControl } from "../core";
+import type { PatternOverride, CrosshairControl, UserSlot } from "../core";
 
 /**
  * arrangement: 3분짜리 전체 트랙. 시드가 정해지면 바로 렌더링을 시작해두고, 재생 버튼은
@@ -64,7 +64,8 @@ export function usePlayer(
   pattern: Pattern,
   override: PatternOverride | null,
   liveControls: CrosshairControl | null = null,
-  mode: PlayerMode = "arrangement"
+  mode: PlayerMode = "arrangement",
+  userKit: Partial<Record<UserSlot, ArrayBuffer[]>> | null = null
 ): Player {
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
   const bufferRef = useRef<AudioBuffer | null>(null);
@@ -134,6 +135,7 @@ export function usePlayer(
       const options = {
         override,
         liveControls,
+        userKit,
         sampleRate: audioContext()?.sampleRate,
       };
       const rendering =
@@ -161,7 +163,7 @@ export function usePlayer(
     }, mode === "loop" ? 0 : RENDER_DEBOUNCE_MS);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seedHash, override, liveControls, mode]);
+  }, [seedHash, override, liveControls, mode, userKit]);
 
   // 렌더링 중에 재생을 눌러뒀거나 편집으로 버퍼가 새로 나왔으면 여기서 이어 붙인다.
   useEffect(() => {
