@@ -32,6 +32,20 @@ function AppContent() {
   const [receivedLocalKit, setReceivedLocalKit] = useState(false);
 
   useEffect(() => {
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const colors = ["#cccccc", "#75fb4c"];
+    let i = 0;
+    meta.setAttribute("content", colors[0]);
+    // .ambient-bg의 10s step-end 애니메이션과 같은 5초 간격으로 브라우저 크롬(사파리 탭바 등) 색을 맞춘다.
+    const id = setInterval(() => {
+      i = (i + 1) % colors.length;
+      meta.setAttribute("content", colors[i]);
+    }, 5000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
     restoreRedirectedPath();
     const route = readRoute();
     if (route.seed) {
