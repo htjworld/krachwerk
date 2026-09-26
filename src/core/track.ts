@@ -1,6 +1,7 @@
 import { mulberry32, pick } from "./prng";
 import { STEP_COUNT, type Pattern, type StepCell } from "./pattern";
 import type { KitId, SampleId } from "./samples";
+import type { TonalKit } from "./tonalBank";
 import { legacyDrumVariantFor, legacyPercSteps } from "./motifs";
 
 // generatePattern이 뽑는 것(템포, 스케일, 보이스, 16스텝 베이스/리드)은 시드의 정체성이자
@@ -12,6 +13,11 @@ const TRACK_SALT = 0x9e3779b9;
 // legacy 킷 다양성(§15.3/§15.5): analog808(코어) 외에 uzu-drumkit·Simmons로 킥/스네어/퍼커션
 // 세트를 통째로 바꿔 낀다. 하나 고르면 buildRig가 그 킷의 샘플만 받는다(samples.ts).
 const KITS: (KitId | null)[] = [null, "legacy-uzu", "legacy-simmons"];
+
+// pad/stab에 겹치는 샘플 톤(§15.3): VCSL은 stab 대용, Karoryfer는 pad 대용. 2/3은 그냥
+// 신스만 쓴다(null) — 블루프린트마다 그 큐 자체가 없으면(예: metropolis엔 stab이 없다)
+// 이 선택은 조용히 아무 효과가 없다.
+const TONAL_KITS: (TonalKit | null)[] = [null, "vcsl", "karoryfer"];
 
 const KICKS_BY_KIT: Record<string, SampleId[]> = {
   core: ["kickTight", "kickMid", "kickLong"],
@@ -67,6 +73,10 @@ const METALS: SampleId[] = [
 export interface Track {
   /** 킥/스네어/퍼커션 세트를 통째로 바꿔 끼는 킷(§15.3). null이면 코어(analog808). */
   kit: KitId | null;
+  /** pad/stab에 겹치는 샘플 톤(§15.3). null이면 신스만. */
+  tonalKit: TonalKit | null;
+  /** tonalKit 안의 후보 중 몇 번째(파일 선택). */
+  tonalIndex: number;
   kick: SampleId;
   backbeat: SampleId;
   shaker: SampleId;
@@ -104,6 +114,8 @@ export function deriveTrack(pattern: Pattern): Track {
   // §11 단계 4/5의 교훈). 실제로는 legacy만 킷을 쓴다(kick/backbeat/shaker 풀 선택).
   const kit = pick(rng, KITS);
   const kitKey = kit ?? "core";
+  const tonalKit = pick(rng, TONAL_KITS);
+  const tonalIndex = Math.floor(rng() * 8);
 
   const metalA = pick(rng, METALS);
   let metalB = pick(rng, METALS);
@@ -139,6 +151,8 @@ export function deriveTrack(pattern: Pattern): Track {
 
   return {
     kit,
+    tonalKit,
+    tonalIndex,
     kick: pick(rng, KICKS_BY_KIT[kitKey]),
     backbeat: pick(rng, BACKBEATS_BY_KIT[kitKey]),
     shaker: pick(rng, SHAKERS_BY_KIT[kitKey]),

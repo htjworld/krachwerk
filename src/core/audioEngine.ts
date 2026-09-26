@@ -36,6 +36,7 @@ import { loadVoiceForCode, type VoiceLang } from "./voiceBank";
 import { loadSigSample, type SigSampleKind } from "./sigBank";
 import { loadSynthKit, type SynthKit } from "./drumSynth";
 import { ROLE_TO_USER_SLOT, USER_SLOTS, type UserSlot } from "./userKit";
+import { loadTonalSample } from "./tonalBank";
 
 export function secondsPerStep(tempo: number): number {
   return 60 / tempo / 4;
@@ -243,7 +244,18 @@ function buildMix(ctx: BaseAudioContext, tempo: number, liveCutoffHz: number): M
 
 // ---------------------------------------------------------------- 드럼 (JS 믹싱)
 
-export type DrumRole = "kick" | "hat" | "openHat" | "backbeat" | "perc" | "metal" | "lowDrum" | "tick" | "calls" | "sig";
+export type DrumRole =
+  | "kick"
+  | "hat"
+  | "openHat"
+  | "backbeat"
+  | "perc"
+  | "metal"
+  | "lowDrum"
+  | "tick"
+  | "calls"
+  | "sig"
+  | "tonal";
 
 interface DrumVoiceSpec {
   level: number;
@@ -267,6 +279,8 @@ const DRUM_VOICES: Record<DrumRole, DrumVoiceSpec> = {
   calls: { level: 0.8, pan: 0, send: 0.3 },
   // 시그니처 사운드(§15.2 S2~S6). 킥 사이드체인 안 받는다 — KICK_BUS_ROLES에 없다.
   sig: { level: 0.6, pan: 0, send: 0.35 },
+  // VCSL 톤(§15.3, stab 위에 겹치는 샘플). stab과 비슷한 자리(약간 오른쪽, 리버브 많이).
+  tonal: { level: 0.5, pan: 0.1, send: 0.3 },
 };
 
 const KICK_BUS_ROLES: readonly DrumRole[] = ["kick", "lowDrum"];
@@ -689,6 +703,32 @@ function scheduleGlide(
   osc.stop(start + length);
 }
 
+// Karoryfer 오르간 톤(§15.3, "pad 대용")을 신스 패드 위에 겹친다. loop=true로 원본 길이를
+// 넘겨 섹션 전체를 채우고, schedulePad와 같은 모양의 attack/release 게인 봉투를 씌운다.
+function scheduleSampledPad(
+  ctx: BaseAudioContext,
+  destination: AudioNode,
+  buffer: AudioBuffer,
+  start: number,
+  length: number
+): void {
+  const attack = Math.min(2.5, length * 0.3);
+  const release = Math.min(3, length * 0.35);
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.linearRampToValueAtTime(0.35, start + attack);
+  gain.gain.setValueAtTime(0.35, start + length - release);
+  gain.gain.linearRampToValueAtTime(0, start + length);
+  gain.connect(destination);
+
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.loop = true;
+  source.connect(gain);
+  source.start(start);
+  source.stop(start + length);
+}
+
 // ---------------------------------------------------------------- 마디 스케줄링
 
 // 큐가 있고 이 마디에서 활성화된 rateSteps로 해당 스텝이 켜지는지. 큐 자체가 없으면(레이어가
@@ -729,6 +769,8 @@ export interface Rig {
   synthKit: SynthKit | null;
   /** 내 소리(§15.4). 슬롯마다 곡 하나 동안 고정으로 쓸 버퍼 하나. 없으면 기본 소리 그대로. */
   userKitBuffers: Partial<Record<UserSlot, AudioBuffer>> | null;
+  /** VCSL/Karoryfer 톤(§15.3). track.tonalKit이 null이면 안 채운다. */
+  tonalBuffer: AudioBuffer | null;
 }
 
 export function scheduleBar(
@@ -958,6 +1000,10 @@ export function scheduleBar(
           0.55
         );
       });
+      // VCSL 톤(§15.3, "stab 대용")을 신스 스탭 위에 겹친다. 시드 1/3만 이 킷을 고른다.
+      if (track.tonalKit === "vcsl" && rig.tonalBuffer) {
+        playHit("tonal", rig.tonalBuffer, time, 0.4);
+      }
     }
   }
 
@@ -1137,6 +1183,9 @@ async function buildRig(
         ? await loadSynthKit(ctx.sampleRate, "skyline", pattern.seedHash)
         : null;
 
+  // VCSL/Karoryfer 톤(§15.3): track.tonalKit이 골라 둔 킷·인덱스로 파일 하나만 받는다.
+  const tonalBuffer = track.tonalKit ? await loadTonalSample(ctx, track.tonalKit, track.tonalIndex) : null;
+
   const rig: Rig = {
     ctx,
     mix,
@@ -1163,6 +1212,7 @@ async function buildRig(
     sigBuffer,
     synthKit,
     userKitBuffers: await resolveUserKitBuffers(ctx, userKit, pattern.seedHash),
+    tonalBuffer,
   };
 
   return { ctx, rig };
@@ -1200,6 +1250,10 @@ export async function renderArrangement(pattern: Pattern, options: RenderOptions
 
     if (section.cues.some((cue) => cue.layer === "pad")) {
       schedulePad(ctx, rig.strips.pad, pattern.scale, rig.track.chord[0], start, length);
+      // Karoryfer 오르간(§15.3, "pad 대용")을 신스 패드 위에 겹친다. 시드 1/3만 이 킷을 고른다.
+      if (rig.track.tonalKit === "karoryfer" && rig.tonalBuffer) {
+        scheduleSampledPad(ctx, rig.strips.pad, rig.tonalBuffer, start, length);
+      }
     }
     if (section.cues.some((cue) => cue.layer === "riser")) {
       scheduleRiser(ctx, rig.strips.riser, rig.noise, start, length);
