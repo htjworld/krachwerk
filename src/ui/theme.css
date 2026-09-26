@@ -1,3 +1,12 @@
+/* 한국어 로고 워드마크 전용. Nintendo DS 스타일 비트맵 폰트라 확대해도 네모 픽셀이
+   그대로 보인다 (OFL-1.1, https://galmuri.quiple.dev). */
+@font-face {
+  font-family: "Galmuri11";
+  src: url("https://cdn.jsdelivr.net/npm/galmuri@2.40.3/dist/Galmuri11-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+
 :root {
   --bg-device: #0d1117;
   --fg-device: #75fb4c;
@@ -155,11 +164,28 @@ button {
   color: var(--accent-blue);
 }
 
+/* flex-wrap 대신 고정 열 그리드를 쓴다: 언어가 바뀌면 버튼 라벨 길이가 달라져서
+   flex-wrap의 줄바꿈 지점 자체가 바뀌고(그리드가 깨져 보임), 그리드는 열 수가
+   고정이라 언어에 상관없이 항상 같은 모양을 유지한다. */
 .trait-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
   margin-bottom: 20px;
+}
+
+.button-grid {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.button-grid-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.button-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
 }
 
 .sr-only {
@@ -186,9 +212,18 @@ button {
   line-height: 1.15;
   text-align: center;
   font-size: clamp(4px, 2.1vw, 13px);
+  /* 로고 색이 배경 깜빡임의 초록과 완전히 같아서, 배경이 초록일 때 그림자가 없으면
+     로고가 그대로 사라진다. 검은 윤곽 + 은은한 글로우로 배경과 상관없이 읽히게 한다. */
+  text-shadow:
+    1px 0 0 #000,
+    -1px 0 0 #000,
+    0 1px 0 #000,
+    0 -1px 0 #000,
+    0 0 10px rgba(0, 0, 0, 0.65);
 }
 
 .logo-ascii[data-lang="ko"] {
+  font-family: "Galmuri11", var(--font-device);
   font-size: clamp(22px, 6vw, 40px);
   font-weight: bold;
   letter-spacing: 0.12em;
@@ -324,6 +359,15 @@ button {
 .track-progress-fill {
   height: 100%;
   background: var(--fg-device);
+}
+
+/* 렌더가 아직 끝나기 전, 지금까지 나온 앞부분(비디오의 버퍼링 바와 같은 개념). */
+.track-progress-buffered {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  background: var(--fg-device-dim);
+  opacity: 0.4;
 }
 
 /* 실제 스크러버. 눈에 보이는 건 위의 바이고, 이 input이 그 위를 덮어서 클릭, 드래그,

@@ -63,6 +63,12 @@ export interface RenderOptions {
   sampleRate?: number;
   onProgress?: (ratio: number) => void;
   /**
+   * 전체 렌더링이 끝나기 전에도, 지금까지 렌더된 앞부분만 담은 프리뷰 버퍼를 주기적으로
+   * 넘겨준다(§UX: 앞부분만 먼저 재생/이동 가능하게). 최종 버퍼(정규화 완료)는 여기로 오지
+   * 않고 항상 `renderArrangement`의 반환값으로만 온다.
+   */
+  onChunk?: (buffer: AudioBuffer, readySamples: number) => void;
+  /**
    * 내 소리(§15.4). 원본 ArrayBuffer로 받는다 — decodeAudioData가 컨텍스트에 따라 다른
    * 샘플레이트로 디코딩하므로(§1.3 샘플뱅크 주석과 같은 이유), 실제 렌더링에 쓰는
    * OfflineAudioContext로 그때그때 디코딩해야 한다(미리 디코딩해서 캐시해 두면 재생
@@ -169,7 +175,50 @@ export interface Mix {
   master: GainNode;
 }
 
-function buildMix(ctx: BaseAudioContext, tempo: number, liveCutoffHz: number): Mix {
+// 렌더링이 끝나기 전에 지금까지 나온 PCM을 그대로 가로채 미리듣기용 버퍼를 만든다.
+// ponytail: ScriptProcessorNode는 폐기 예정 API지만, 오프라인 렌더 도중 동기 콜백으로
+// 신호를 그대로 복사할 수 있는 가장 단순한 방법이다. 실제 출력 경로에는 끼지 않고
+// (게인 0인 노드로만 destination에 연결) 관찰만 하므로 최종 믹스에는 영향이 없다.
+// AudioWorkletNode로 옮기려면 별도 모듈 로드가 필요해서 지금 목적에는 과하다.
+function attachChunkTap(
+  ctx: BaseAudioContext,
+  source: AudioNode,
+  totalSamples: number,
+  onChunk: (buffer: AudioBuffer, readySamples: number) => void
+): void {
+  const CHUNK_FRAMES = 4096;
+  const CHANNELS = 2;
+  const tap = ctx.createScriptProcessor(CHUNK_FRAMES, CHANNELS, CHANNELS);
+  const accum = Array.from({ length: CHANNELS }, () => new Float32Array(totalSamples));
+  let cursor = 0;
+  let calls = 0;
+  tap.onaudioprocess = (e) => {
+    const take = Math.min(e.inputBuffer.length, Math.max(0, totalSamples - cursor));
+    for (let c = 0; c < CHANNELS; c++) {
+      if (take > 0) accum[c].set(e.inputBuffer.getChannelData(c).subarray(0, take), cursor);
+    }
+    cursor = Math.min(totalSamples, cursor + e.inputBuffer.length);
+    calls++;
+    // 콜백마다(4096프레임, 44.1kHz에서 ~93ms) 만들면 너무 잦으니 8번에 한 번(~0.75초)만.
+    if (cursor > 0 && (calls % 8 === 0 || cursor >= totalSamples)) {
+      const preview = new AudioBuffer({ length: cursor, numberOfChannels: CHANNELS, sampleRate: ctx.sampleRate });
+      for (let c = 0; c < CHANNELS; c++) preview.copyToChannel(accum[c].subarray(0, cursor), c);
+      onChunk(preview, cursor);
+    }
+  };
+  const sink = ctx.createGain();
+  sink.gain.value = 0;
+  source.connect(tap);
+  tap.connect(sink);
+  sink.connect(ctx.destination);
+}
+
+function buildMix(
+  ctx: BaseAudioContext,
+  tempo: number,
+  liveCutoffHz: number,
+  chunkTap?: { totalSamples: number; onChunk: (buffer: AudioBuffer, readySamples: number) => void }
+): Mix {
   const limiter = ctx.createDynamicsCompressor();
   limiter.threshold.value = -3;
   limiter.knee.value = 3;
@@ -177,6 +226,7 @@ function buildMix(ctx: BaseAudioContext, tempo: number, liveCutoffHz: number): M
   limiter.attack.value = 0.002;
   limiter.release.value = 0.14;
   limiter.connect(ctx.destination);
+  if (chunkTap) attachChunkTap(ctx, limiter, chunkTap.totalSamples, chunkTap.onChunk);
 
   const saturator = ctx.createWaveShaper();
   saturator.curve = makeSaturationCurve(1.5);
@@ -1122,7 +1172,7 @@ async function buildRig(
   options: RenderOptions,
   duration: number
 ): Promise<{ ctx: OfflineAudioContext; rig: Rig }> {
-  const { override, liveControls, onProgress, userKit } = options;
+  const { override, liveControls, onProgress, onChunk, userKit } = options;
   const sampleRate = options.sampleRate || DEFAULT_SAMPLE_RATE;
   const tempo = liveControls?.tempo ?? pattern.tempo;
   const totalSamples = Math.ceil(duration * sampleRate);
@@ -1131,7 +1181,12 @@ async function buildRig(
 
   const track = deriveTrack(pattern);
   const bank = await loadSampleBank(ctx, track.kit);
-  const mix = buildMix(ctx, tempo, cutoffToFrequency(liveControls?.filterCutoff ?? 1));
+  const mix = buildMix(
+    ctx,
+    tempo,
+    cutoffToFrequency(liveControls?.filterCutoff ?? 1),
+    onChunk ? { totalSamples, onChunk } : undefined
+  );
   const noise = makeNoiseBuffer(ctx, pattern.seedHash, 1);
 
   const strips = Object.fromEntries(

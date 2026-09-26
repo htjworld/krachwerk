@@ -29,6 +29,7 @@
     "summaryLength": "Length {length}, {sections} sections",
     "summaryStructure": "Structure {structure}",
     "rendering": "Building",
+    "stillRendering": "Still building the rest {pct}%",
     "seek": "Playback position",
     "renderFailed": "This browser could not build the track. {reason}",
     "exporting": "Exporting",

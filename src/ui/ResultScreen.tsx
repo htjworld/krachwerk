@@ -65,9 +65,13 @@ function TrackProgress({ player, pattern, tempo }: { player: Player; pattern: Pa
   const clamped = Math.min(position, total);
   const ratio = total > 0 ? clamped / total : 0;
 
+  // 아직 렌더가 안 끝났으면 지금까지 나온 앞부분만큼만 재생/이동할 수 있다(비디오 버퍼링 바와 같은 개념).
+  const bufferedRatio = total > 0 ? Math.min(1, player.duration / total) : 0;
+
   return (
     <div className="track-progress">
       <div className="track-progress-bar">
+        <div className="track-progress-buffered" style={{ width: `${bufferedRatio * 100}%` }} />
         <div className="track-progress-fill" style={{ width: `${ratio * 100}%` }} />
         {arrangement.sections.slice(1).map((section) => (
           <div
@@ -152,11 +156,13 @@ export function ResultScreen({
     setTimeout(() => setLinkCopied(false), 2000);
   };
 
+  // 렌더가 끝나기 전에도 지금까지 나온 앞부분(player.duration > 0)만으로 바로 재생할 수 있다.
+  const playable = player.duration > 0;
   const playLabel = player.isPlaying
     ? t("resultScreen.pause")
-    : player.isRendering
-      ? `${t("resultScreen.rendering")} ${Math.round(player.progress * 100)}%`
-      : t("resultScreen.play");
+    : playable
+      ? t("resultScreen.play")
+      : `${t("resultScreen.rendering")} ${Math.round(player.progress * 100)}%`;
 
   return (
     <>
@@ -184,8 +190,8 @@ export function ResultScreen({
 
         {player.error && <p className="device-error">{t("resultScreen.renderFailed", { reason: player.error })}</p>}
 
-        <div className="button-row" style={{ marginTop: 0 }}>
-          <button type="button" className="device-button-primary" onClick={player.toggle}>
+        <div className="button-grid button-grid-3" style={{ marginTop: 0 }}>
+          <button type="button" className="device-button-primary" onClick={player.toggle} disabled={!playable}>
             {playLabel}
           </button>
           <button type="button" className="device-button" onClick={handleDownload} disabled={isExporting}>
@@ -196,8 +202,13 @@ export function ResultScreen({
           </button>
         </div>
         {linkCopied && <p className="device-subheading">{t("resultScreen.linkCopied")}</p>}
+        {playable && player.isRendering && (
+          <p className="device-subheading">
+            {t("resultScreen.stillRendering", { pct: Math.round(player.progress * 100) })}
+          </p>
+        )}
 
-        <div className="button-row">
+        <div className="button-grid button-grid-2">
           <button type="button" className="device-text-button" onClick={() => setShowMatrix((v) => !v)}>
             {t("resultScreen.editPattern")}
           </button>

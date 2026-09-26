@@ -29,6 +29,7 @@
     "summaryLength": "길이 {length}, 섹션 {sections}개",
     "summaryStructure": "구성 {structure}",
     "rendering": "만드는 중",
+    "stillRendering": "뒷부분 만드는 중 {pct}%",
     "seek": "재생 위치",
     "renderFailed": "이 브라우저에서 트랙을 만들지 못했어요. {reason}",
     "exporting": "파일 만드는 중",

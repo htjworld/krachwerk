@@ -124,12 +124,14 @@ export function usePlayer(
   );
 
   const seedHash = pattern.seedHash;
+  const lastChunkAtRef = useRef(0);
   useEffect(() => {
     const run = ++runRef.current;
     setIsRendering(true);
     setProgress(0);
     setError(null);
     offsetRef.current = 0;
+    lastChunkAtRef.current = 0;
     const timer = setTimeout(() => {
       // 재생에 쓸 컨텍스트와 같은 샘플레이트로 렌더링한다. 어긋나면 사파리에서 무음이 난다.
       const options = {
@@ -145,6 +147,21 @@ export function usePlayer(
               ...options,
               onProgress: (ratio) => {
                 if (run === runRef.current) setProgress(ratio);
+              },
+              // 3분 전체가 끝나길 기다리지 않고, 지금까지 렌더된 앞부분만으로도 바로
+              // 재생/이동할 수 있게 미리보기 버퍼를 계속 갱신한다.
+              // ponytail: 버퍼가 바뀔 때마다 재생 중이면 소스를 새로 걸어야 해서(아래
+              // 이어붙이기 이펙트) 짧은 끊김(클릭)이 한 번씩 난다. 렌더는 실시간보다
+              // 훨씬 빨리 끝나 프리뷰가 초당 여러 번 도착할 수 있어서, 재생 중 재시작을
+              // 500ms에 한 번으로 묶어 끊김을 줄인다. 완전히 안 끊기게 하려면 재시작
+              // 대신 새 오디오 구간만 잘라 뒤이어 스케줄링하는 방식으로 바꿔야 한다.
+              onChunk: (preview) => {
+                if (run !== runRef.current) return;
+                const now = performance.now();
+                if (lastChunkAtRef.current !== 0 && now - lastChunkAtRef.current < 500) return;
+                lastChunkAtRef.current = now;
+                bufferRef.current = preview;
+                setBuffer(preview);
               },
             });
       rendering
@@ -165,12 +182,15 @@ export function usePlayer(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seedHash, override, liveControls, mode, userKit]);
 
-  // 렌더링 중에 재생을 눌러뒀거나 편집으로 버퍼가 새로 나왔으면 여기서 이어 붙인다.
+  // 렌더링 중에 재생을 눌러뒀거나 편집/진행 중인 프리뷰로 버퍼가 새로 나왔으면 여기서
+  // 이어 붙인다. offsetRef.current가 아니라 getPosition()을 써야 한다 — offsetRef는
+  // 일시정지/탐색 때만 갱신되므로, 재생 중 프리뷰 버퍼가 계속 바뀌는 동안(진행률 갱신마다)
+  // 그대로 쓰면 매번 마지막으로 멈췄던 지점(보통 0)으로 되감겨 버린다.
   useEffect(() => {
     if (!isPlaying || !buffer) return;
     if (playingBufferRef.current === buffer && sourceRef.current) return;
-    startFrom(offsetRef.current);
-  }, [buffer, isPlaying, startFrom]);
+    startFrom(getPosition());
+  }, [buffer, isPlaying, startFrom, getPosition]);
 
   const toggle = useCallback(() => {
     if (isPlaying) {

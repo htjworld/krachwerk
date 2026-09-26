@@ -6,13 +6,6 @@ export type Lang = "ko" | "en";
 
 const DICTS: Record<Lang, Record<string, unknown>> = { ko, en };
 
-function detectLang(): Lang {
-  if (typeof navigator === "undefined") return "ko";
-  const preferred = navigator.language?.toLowerCase() ?? "";
-  if (preferred.startsWith("en")) return "en";
-  return "ko";
-}
-
 function lookup(dict: Record<string, unknown>, path: string): string | undefined {
   const value = path.split(".").reduce<unknown>((node, key) => {
     if (node && typeof node === "object") return (node as Record<string, unknown>)[key];
@@ -30,7 +23,7 @@ interface I18nContextValue {
 const I18nContext = createContext<I18nContextValue | null>(null);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLang] = useState<Lang>(detectLang);
+  const [lang, setLang] = useState<Lang>("en");
 
   const value = useMemo<I18nContextValue>(() => {
     const t = (path: string, vars?: Record<string, string | number>) => {
