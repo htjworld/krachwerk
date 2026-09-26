@@ -1172,7 +1172,7 @@ async function buildRig(
     const kind = pick(sigRng, ["quindar", "bell", "mech", "modem", "space"] as const);
     if (kind === "quindar") sigBuffer = makeQuindarBuffer(ctx);
     else if (kind === "bell") sigBuffer = makeBellBuffer(ctx, pattern.seedHash);
-    else sigBuffer = await loadSigSample(ctx, kind as SigSampleKind, Math.floor(sigRng() * 7));
+    else sigBuffer = await loadSigSample(ctx, kind as SigSampleKind, Math.floor(sigRng() * 12));
   }
 
   // 합성 드럼 킷(§14.2 K): compute/metropolis는 legacy 샘플 대신 자기 킷으로 킥·백비트·햇을 낸다.
