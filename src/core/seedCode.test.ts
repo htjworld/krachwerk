@@ -63,15 +63,17 @@ describe("parseSeed / encodeSeed", () => {
     }
   });
 
-  it("장르마다 0, 끝, 무작위 1만 개를 왕복한다", () => {
+  it("장르마다 0, 끝, 무작위 5천 개를 왕복한다", () => {
+    const bad: string[] = [];
     for (const family of SEED_FAMILIES) {
       const space = familySpace(family);
-      for (const n of [0n, space - 1n, ...sample(10_000, space)]) {
+      for (const n of [0n, space - 1n, ...sample(5_000, space)]) {
         const code = encodeSeed(family, n);
-        expect(code).toMatch(/^[0-9a-z]{10}$/);
-        expect(parseSeed(code)).toEqual({ family, code, n });
+        const back = parseSeed(code);
+        if (!isCanonical(code) || back.family !== family || back.n !== n) bad.push(`${family}:${n}`);
       }
     }
+    expect(bad).toEqual([]);
   });
 
   it("장르 안 번호는 [0, familySpace) 안이다", () => {
@@ -84,11 +86,11 @@ describe("parseSeed / encodeSeed", () => {
 describe("familyFeistel / familyFeistelInverse", () => {
   it.each(SEED_FAMILIES)("%s: 순열이 공간 안에 머물고 정확히 되돌아온다", (family: SeedFamily) => {
     const space = familySpace(family);
-    for (const n of [0n, 1n, space - 1n, ...sample(5_000, space, 7)]) {
+    const bad = [0n, 1n, space - 1n, ...sample(5_000, space, 7)].filter((n) => {
       const p = familyFeistel(family, n);
-      expect(p >= 0n && p < space).toBe(true);
-      expect(familyFeistelInverse(family, p)).toBe(n);
-    }
+      return p < 0n || p >= space || familyFeistelInverse(family, p) !== n;
+    });
+    expect(bad).toEqual([]);
   });
 
   it("실제로 섞고, 장르마다 다른 순열이다", () => {

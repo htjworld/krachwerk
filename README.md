@@ -28,7 +28,7 @@ Krachwerk는 설정 대신 시드 하나로 곡을 정합니다. 정해진 규�
 
 ## Preview
 
-| <시드 입력 화면과 아티스트 사진> | <생성된 트랙 정보와 재생 화면> | <패턴 편집 화면> |
+| 시드 입력과 스타일 선택 | 트랙 정보와 재생 | 패턴 편집 |
 |-----------|-----------|-----------|
 | ![seed](./assets/seed.png) | ![result](./assets/result.png) | ![pattern](./assets/pattern.png) |
 
