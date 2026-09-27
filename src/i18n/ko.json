@@ -5,10 +5,9 @@
   },
   "seedScreen": {
     "inputPlaceholder": "SEED",
-    "randomButton": "무작위로 만들기",
-    "traitsHeading": "성향을 골라보세요 (선택)",
     "generateButton": "생성",
-    "myKit": "MY KIT · {count}"
+    "myKit": "MY KIT · {count}",
+    "legendsHeading": "LEGENDS ARE WATCHING..."
   },
   "artistFaces": {
     "aria": {
@@ -24,37 +23,36 @@
       "p": "PEGGY GOU"
     }
   },
-  "traits": {
-    "bassEmphasis": "베이스 강조",
-    "unusualTimbre": "특이한 음색 위주",
-    "melodyMinimal": "미니멀한 멜로디",
-    "melodyElaborate": "화려한 멜로디"
-  },
   "resultScreen": {
-    "generatedMessage": "생성했어요",
     "play": "재생하기",
     "pause": "정지하기",
     "download": "다운로드하기",
-    "copyLink": "공유 링크 만들기",
-    "linkCopied": "링크를 복사했어요",
-    "summaryHeading": "이 트랙의 특징",
-    "summaryTempo": "템포 {tempo} BPM",
-    "summaryScale": "스케일 {scale}",
-    "summaryVoices": "베이스 {bass}, 리드 {lead}",
-    "summaryLength": "길이 {length}, 섹션 {sections}개",
-    "summaryStructure": "구성 {structure}",
-    "summaryStyle": "스타일 {style}",
-    "rendering": "만드는 중",
-    "stillRendering": "뒷부분 만드는 중 {pct}%",
+    "copyLink": "공유",
+    "linkCopied": "복사했어요",
     "seek": "재생 위치",
     "renderFailed": "이 브라우저에서 트랙을 만들지 못했어요. {reason}",
     "exporting": "파일 만드는 중",
     "previewMode": "편집하는 동안은 한 마디만 반복해서 들려줘요",
-    "editPattern": "패턴 보기/편집하기",
-    "liveControl": "라이브 컨트롤",
-    "userKit": "내 소리",
-    "newSeed": "다른 시드로 돌아가기",
-    "receivedLocalKit": "보낸 사람의 개인 소리는 포함되지 않았어요"
+    "newSeed": "새 시드",
+    "receivedLocalKit": "보낸 사람의 개인 소리는 포함되지 않았어요",
+    "building": "만드는 중 {pct}%",
+    "lengthValue": "{length}, 섹션 {sections}개",
+    "spec": {
+      "style": "스타일",
+      "tempo": "템포",
+      "scale": "스케일",
+      "bass": "베이스",
+      "lead": "리드",
+      "length": "길이",
+      "structure": "구성"
+    },
+    "tool": {
+      "pattern": "패턴",
+      "live": "라이브",
+      "sounds": "내 소리",
+      "soundsDefault": "기본 킷",
+      "soundsCount": "{count}개"
+    }
   },
   "userKit": {
     "title": "내 소리",

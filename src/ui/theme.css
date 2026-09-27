@@ -8,6 +8,7 @@
   --text-on-ambient: #0d1117;
   /* App.tsx가 body 배경으로 5초마다 토글하는 두 색 중 초록 쪽과 동일한 값 */
   --ambient-green: #00ff00;
+  --fg-muted: #8b949e;
   --font-device: "Courier New", "D2Coding", "Noto Sans Mono CJK KR", monospace;
   --font-frame: -apple-system, BlinkMacSystemFont, "Segoe UI", "Pretendard", sans-serif;
 }
@@ -158,13 +159,6 @@ button {
 /* flex-wrap 대신 고정 열 그리드를 쓴다: 언어가 바뀌면 버튼 라벨 길이가 달라져서
    flex-wrap의 줄바꿈 지점 자체가 바뀌고(그리드가 깨져 보임), 그리드는 열 수가
    고정이라 언어에 상관없이 항상 같은 모양을 유지한다. */
-.trait-row {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-  margin-bottom: 20px;
-}
-
 .button-grid {
   display: grid;
   gap: 8px;
@@ -189,7 +183,9 @@ button {
 }
 
 .logo-wrap {
-  margin: 0 0 24px;
+  /* overflow-x: auto가 세로도 잘라서, 위아래 여백 안에 로고 외곽선과 그림자 번짐이 다 들어오게 한다. */
+  padding: 12px 0;
+  margin: -12px 0 12px;
   width: 100%;
   display: flex;
   justify-content: center;
@@ -211,10 +207,9 @@ button {
     drop-shadow(0 -1px 0 #000) drop-shadow(0 0 10px rgba(0, 0, 0, 0.65));
 }
 
+/* 한글 아트는 9줄 112열이라(영어 6줄 75열) 글자 크기를 6/9로 줄이면 가로세로가 영어와 같아진다. */
 .logo-ascii[data-lang="ko"] {
-  font-size: clamp(22px, 6vw, 40px);
-  font-weight: bold;
-  letter-spacing: 0.12em;
+  font-size: calc(clamp(4px, 2.1vw, 13px) * 2 / 3);
 }
 
 .logo-line {
@@ -264,7 +259,7 @@ button {
 .seed-composer {
   display: flex;
   gap: 10px;
-  margin-bottom: 12px;
+  margin: 0;
 }
 
 .seed-composer .device-input {
@@ -284,17 +279,33 @@ button {
   min-width: 140px;
 }
 
-.seed-random-button {
-  display: block;
-  margin: 0 0 20px;
-  padding-left: 0;
+.seed-composer + .device-label {
+  margin: 10px 0 0;
+}
+
+.legends-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 32px 0 14px;
+  font-size: 0.72em;
+  letter-spacing: 0.2em;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.legends-heading::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--panel);
 }
 
 .artist-faces {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;
-  margin: 0 0 20px;
+  margin: 0;
 }
 
 @media (max-width: 480px) {
@@ -306,11 +317,21 @@ button {
 .artist-face {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   padding: 0;
   border: none;
   background: none;
   font-family: var(--font-device);
+  color: var(--fg-muted);
+}
+
+.artist-face:hover .artist-face-img,
+.artist-face:focus-visible .artist-face-img {
+  border-color: var(--fg-device-dim);
+}
+
+.artist-face[aria-pressed="true"] {
+  color: var(--fg-device);
 }
 
 .artist-face-img {
@@ -337,7 +358,8 @@ button {
 }
 
 .artist-face-label {
-  font-size: 0.75em;
+  font-size: 0.68em;
+  letter-spacing: 0.08em;
   text-align: center;
   line-height: 1.2;
 }
@@ -376,16 +398,90 @@ button {
   margin-bottom: 8px;
 }
 
-.track-summary {
+.result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -4px 0 14px;
+}
+
+.result-seed {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  font-size: 1.3em;
+  letter-spacing: 0.08em;
+  color: var(--fg-device);
+  overflow-wrap: anywhere;
+}
+
+.result-head .device-text-button {
+  flex-shrink: 0;
+  font-size: 0.75em;
+  padding-right: 0;
+}
+
+/* 키는 작은 회색 모노 대문자, 값은 밝은 초록 산세리프로 둬서 한눈에 갈린다. */
+.spec-key {
+  font-family: var(--font-device);
+  font-size: 0.66rem;
+  font-weight: normal;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.spec-sheet {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 16px;
+  margin: 0 0 22px;
+}
+
+.spec-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid var(--panel);
+  min-width: 0;
+}
+
+.spec-row--structure {
+  grid-column: 1 / -1;
+  border-bottom: 1px solid var(--panel);
+}
+
+.spec-value {
+  margin: 0;
   font-family: var(--font-frame);
-  color: var(--fg-device-dim);
-  font-size: 0.85em;
+  font-size: 0.95em;
+  font-weight: 500;
+  color: var(--fg-device);
+  overflow-wrap: anywhere;
+}
+
+.spec-row--structure .spec-value {
+  font-size: 0.8em;
   line-height: 1.6;
-  margin: 12px 0 20px;
+  color: var(--fg-device-dim);
 }
 
 .track-progress {
   margin: 0 0 18px;
+}
+
+/* 편집 패널이 열려 트랙 진행 바가 빠지는 동안 같은 높이를 채워서 아래 버튼이 안 움직인다. */
+.loop-note {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  margin: 0 0 18px;
+  font-family: var(--font-frame);
+  font-size: 0.8em;
+  color: var(--fg-device-dim);
 }
 
 .track-progress-bar {
@@ -456,10 +552,112 @@ button {
 .track-progress-labels {
   display: flex;
   justify-content: space-between;
+  gap: 8px;
   font-family: var(--font-device);
   font-size: 0.75em;
   color: var(--fg-device-dim);
   margin-top: 6px;
+}
+
+.track-progress-status {
+  flex: 1;
+  text-align: center;
+  color: var(--fg-muted);
+}
+
+/* "Create share link"가 두 줄이던 시절의 높이를 그대로 유지한다. */
+.transport > button {
+  min-height: 48px;
+}
+
+.tool-rack {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.tool-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 10px 12px 12px;
+  text-align: left;
+  background: none;
+  border: 1px solid var(--panel);
+  border-radius: 8px;
+  font-family: var(--font-device);
+  color: var(--fg-device-dim);
+  transition: border-color 120ms, background-color 120ms;
+}
+
+.tool-tile:hover,
+.tool-tile:focus-visible {
+  border-color: var(--fg-device-dim);
+  outline: none;
+}
+
+.tool-tile[aria-pressed="true"] {
+  border-color: var(--fg-device);
+  background: rgba(117, 251, 76, 0.06);
+  color: var(--fg-device);
+}
+
+.tool-tile-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 0.68em;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+/* 하드웨어 토글 옆 LED처럼, 열려 있는 패널만 불이 들어온다. */
+.tool-tile-label::after {
+  content: "";
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--panel);
+}
+
+.tool-tile[aria-pressed="true"] .tool-tile-label {
+  color: var(--fg-device);
+}
+
+.tool-tile[aria-pressed="true"] .tool-tile-label::after {
+  background: var(--fg-device);
+  box-shadow: 0 0 6px var(--fg-device);
+}
+
+.tool-tile-value,
+.tool-tile-steps {
+  display: flex;
+  align-items: center;
+  height: 16px;
+  font-size: 0.8em;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* 지금 킥 패턴을 그대로 줄여 그린 미니 시퀀서. */
+.tool-tile-steps {
+  gap: 2px;
+}
+
+.tool-tile-steps i {
+  flex: 1;
+  height: 12px;
+  border-radius: 1px;
+  background: var(--panel);
+}
+
+.tool-tile-steps i[data-on="true"] {
+  background: currentColor;
 }
 
 .crosshair-icons {

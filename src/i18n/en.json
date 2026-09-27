@@ -5,10 +5,9 @@
   },
   "seedScreen": {
     "inputPlaceholder": "SEED",
-    "randomButton": "Generate a random seed",
-    "traitsHeading": "Pick a mood (optional)",
     "generateButton": "Generate",
-    "myKit": "MY KIT · {count}"
+    "myKit": "MY KIT · {count}",
+    "legendsHeading": "LEGENDS ARE WATCHING..."
   },
   "artistFaces": {
     "aria": {
@@ -24,37 +23,36 @@
       "p": "PEGGY GOU"
     }
   },
-  "traits": {
-    "bassEmphasis": "Bass emphasis",
-    "unusualTimbre": "Unusual timbre",
-    "melodyMinimal": "Minimal melody",
-    "melodyElaborate": "Elaborate melody"
-  },
   "resultScreen": {
-    "generatedMessage": "Generated",
     "play": "Play",
     "pause": "Pause",
     "download": "Download",
-    "copyLink": "Create share link",
-    "linkCopied": "Copied the link",
-    "summaryHeading": "About this track",
-    "summaryTempo": "Tempo {tempo} BPM",
-    "summaryScale": "Scale {scale}",
-    "summaryVoices": "Bass {bass}, lead {lead}",
-    "summaryLength": "Length {length}, {sections} sections",
-    "summaryStructure": "Structure {structure}",
-    "summaryStyle": "Style {style}",
-    "rendering": "Building",
-    "stillRendering": "Still building the rest {pct}%",
+    "copyLink": "Share",
+    "linkCopied": "Copied",
     "seek": "Playback position",
     "renderFailed": "This browser could not build the track. {reason}",
     "exporting": "Exporting",
     "previewMode": "While editing you hear one bar on repeat",
-    "editPattern": "View / edit pattern",
-    "liveControl": "Live control",
-    "userKit": "My sounds",
-    "newSeed": "Back to seed screen",
-    "receivedLocalKit": "The sender's personal sounds weren't included"
+    "newSeed": "New seed",
+    "receivedLocalKit": "The sender's personal sounds weren't included",
+    "building": "Building {pct}%",
+    "lengthValue": "{length}, {sections} sections",
+    "spec": {
+      "style": "Style",
+      "tempo": "Tempo",
+      "scale": "Scale",
+      "bass": "Bass",
+      "lead": "Lead",
+      "length": "Length",
+      "structure": "Structure"
+    },
+    "tool": {
+      "pattern": "Pattern",
+      "live": "Live",
+      "sounds": "My sounds",
+      "soundsDefault": "Default kit",
+      "soundsCount": "{count} files"
+    }
   },
   "userKit": {
     "title": "My sounds",

@@ -6,6 +6,7 @@ import {
   effectiveTempo,
   arrangementFor,
   sectionAtSecond,
+  resolveLayers,
   type Pattern,
   type PatternOverride,
   type CrosshairControl,
@@ -34,6 +35,8 @@ interface Props {
   onClearUserKit: () => void;
   receivedLocalKit: boolean;
 }
+
+type Panel = "matrix" | "live" | "kit";
 
 function formatTime(seconds: number): string {
   const total = Math.max(0, Math.round(seconds));
@@ -104,6 +107,10 @@ function TrackProgress({ player, pattern, tempo }: { player: Player; pattern: Pa
       </div>
       <div className="track-progress-labels">
         <span>{sectionAtSecond(arrangement, clamped).id.toUpperCase()}</span>
+        {/* 렌더 진행률은 바 바로 아래 고정된 자리에만 띄운다. 끝나면 비워도 줄 높이가 그대로라 아래가 안 밀린다. */}
+        <span className="track-progress-status">
+          {player.isRendering && t("resultScreen.building", { pct: Math.round(player.progress * 100) })}
+        </span>
         <span>
           {formatTime(clamped)} / {formatTime(total)}
         </span>
@@ -130,17 +137,17 @@ export function ResultScreen({
   receivedLocalKit,
 }: Props) {
   const { t } = useI18n();
-  const [showMatrix, setShowMatrix] = useState(false);
-  const [showCrosshair, setShowCrosshair] = useState(false);
-  const [showUserKit, setShowUserKit] = useState(false);
+  // 편집 패널은 한 번에 하나만 연다. 같은 타일을 다시 누르면 닫힌다.
+  const [panel, setPanel] = useState<Panel | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
   // 편집 패널이 열려 있는 동안은 한 마디 미리듣기로 갈아탄다 (편집 즉시 반영).
-  const mode = showMatrix || showCrosshair || showUserKit ? "loop" : "arrangement";
+  const mode = panel ? "loop" : "arrangement";
   const player = usePlayer(pattern, override, crosshair, mode, userKit);
   const tempo = effectiveTempo(pattern, crosshair);
   const arrangement = arrangementFor(pattern, tempo);
+  const kick = resolveLayers(pattern, override).kick.slice(0, pattern.stepsPerBar);
 
   const handleDownload = async () => {
     setIsExporting(true);
@@ -157,6 +164,7 @@ export function ResultScreen({
     }
   };
 
+  // 복사 확인은 버튼 라벨 자리에서 잠깐 보여준다. 아래에 문구를 따로 띄우면 레이아웃이 밀린다.
   const handleShare = () => {
     onShare();
     setLinkCopied(true);
@@ -165,77 +173,108 @@ export function ResultScreen({
 
   // 렌더가 끝나기 전에도 지금까지 나온 앞부분(player.duration > 0)만으로 바로 재생할 수 있다.
   const playable = player.duration > 0;
-  const playLabel = player.isPlaying
-    ? t("resultScreen.pause")
-    : playable
-      ? t("resultScreen.play")
-      : `${t("resultScreen.rendering")} ${Math.round(player.progress * 100)}%`;
+  const togglePanel = (next: Panel) => setPanel((current) => (current === next ? null : next));
+
+  // 두 칸씩 짝지어 그리드에 놓는다(스타일/템포, 스케일/길이, 베이스/리드). 구성만 한 줄 전체.
+  const specs: [string, string][] = [
+    ["style", styleLabel(pattern, t)],
+    ["tempo", `${Math.round(tempo)} BPM`],
+    ["scale", pattern.scale.name],
+    [
+      "length",
+      t("resultScreen.lengthValue", {
+        length: formatTime(arrangement.totalSeconds),
+        sections: arrangement.sections.length,
+      }),
+    ],
+    ["bass", pattern.bassVoice],
+    ["lead", pattern.leadVoice],
+    ["structure", arrangement.sections.map((s) => s.id.toUpperCase()).join("\u00a0/ ")],
+  ];
 
   return (
     <>
       <div className="device">
-        <h1 className="device-heading">{t("resultScreen.generatedMessage")}</h1>
+        <header className="result-head">
+          <h1 className="result-seed">
+            <span className="spec-key">SEED</span>
+            {pattern.seedInput}
+          </h1>
+          <button type="button" className="device-text-button" onClick={onBackToSeed}>
+            {t("resultScreen.newSeed")}
+          </button>
+        </header>
 
-        <p className="track-summary">
-          {t("resultScreen.summaryStyle", { style: styleLabel(pattern, t) })}
-          <br />
-          {t("resultScreen.summaryTempo", { tempo })}
-          <br />
-          {t("resultScreen.summaryScale", { scale: pattern.scale.name })}
-          <br />
-          {t("resultScreen.summaryVoices", { bass: pattern.bassVoice, lead: pattern.leadVoice })}
-          <br />
-          {t("resultScreen.summaryLength", {
-            length: formatTime(arrangement.totalSeconds),
-            sections: arrangement.sections.length,
-          })}
-          <br />
-          {t("resultScreen.summaryStructure", {
-            structure: arrangement.sections.map((s) => s.id.toUpperCase()).join(" / "),
-          })}
-        </p>
+        <dl className="spec-sheet">
+          {specs.map(([key, value]) => (
+            <div key={key} className={`spec-row spec-row--${key}`}>
+              <dt className="spec-key">{t(`resultScreen.spec.${key}`)}</dt>
+              <dd className="spec-value">{value}</dd>
+            </div>
+          ))}
+        </dl>
 
-        {mode === "arrangement" && <TrackProgress player={player} pattern={pattern} tempo={tempo} />}
+        {mode === "arrangement" ? (
+          <TrackProgress player={player} pattern={pattern} tempo={tempo} />
+        ) : (
+          <p className="loop-note">{t("resultScreen.previewMode")}</p>
+        )}
 
         {player.error && <p className="device-error">{t("resultScreen.renderFailed", { reason: player.error })}</p>}
 
-        <div className="button-grid button-grid-3" style={{ marginTop: 0 }}>
+        <div className="button-grid button-grid-3 transport">
           <button type="button" className="device-button-primary" onClick={player.toggle} disabled={!playable}>
-            {playLabel}
+            {player.isPlaying ? t("resultScreen.pause") : t("resultScreen.play")}
           </button>
           <button type="button" className="device-button" onClick={handleDownload} disabled={isExporting}>
             {isExporting ? t("resultScreen.exporting") : t("resultScreen.download")}
           </button>
           <button type="button" className="device-button" onClick={handleShare}>
-            {t("resultScreen.copyLink")}
+            {linkCopied ? t("resultScreen.linkCopied") : t("resultScreen.copyLink")}
           </button>
         </div>
-        {linkCopied && <p className="device-subheading">{t("resultScreen.linkCopied")}</p>}
-        {playable && player.isRendering && (
-          <p className="device-subheading">
-            {t("resultScreen.stillRendering", { pct: Math.round(player.progress * 100) })}
-          </p>
-        )}
 
-        <div className="button-grid button-grid-2">
-          <button type="button" className="device-text-button" onClick={() => setShowMatrix((v) => !v)}>
-            {t("resultScreen.editPattern")}
+        <div className="tool-rack">
+          <button
+            type="button"
+            className="tool-tile"
+            aria-pressed={panel === "matrix"}
+            onClick={() => togglePanel("matrix")}
+          >
+            <span className="tool-tile-label">{t("resultScreen.tool.pattern")}</span>
+            <span className="tool-tile-steps" aria-hidden="true">
+              {kick.map((on, i) => (
+                <i key={i} data-on={on} />
+              ))}
+            </span>
           </button>
-          <button type="button" className="device-text-button" onClick={() => setShowCrosshair((v) => !v)}>
-            {t("resultScreen.liveControl")}
+          <button
+            type="button"
+            className="tool-tile"
+            aria-pressed={panel === "live"}
+            onClick={() => togglePanel("live")}
+          >
+            <span className="tool-tile-label">{t("resultScreen.tool.live")}</span>
+            <span className="tool-tile-value">{Math.round(tempo)} BPM</span>
           </button>
-          <button type="button" className="device-text-button" onClick={() => setShowUserKit((v) => !v)}>
-            {t("resultScreen.userKit")}
-          </button>
-          <button type="button" className="device-text-button" onClick={onBackToSeed}>
-            {t("resultScreen.newSeed")}
+          <button
+            type="button"
+            className="tool-tile"
+            aria-pressed={panel === "kit"}
+            onClick={() => togglePanel("kit")}
+          >
+            <span className="tool-tile-label">{t("resultScreen.tool.sounds")}</span>
+            <span className="tool-tile-value">
+              {userKitFiles.length > 0
+                ? t("resultScreen.tool.soundsCount", { count: userKitFiles.length })
+                : t("resultScreen.tool.soundsDefault")}
+            </span>
           </button>
         </div>
-        {mode === "loop" && <p className="device-subheading">{t("resultScreen.previewMode")}</p>}
         {receivedLocalKit && <p className="device-subheading">{t("resultScreen.receivedLocalKit")}</p>}
       </div>
 
-      {showUserKit && (
+      {panel === "kit" && (
         <UserKitPanel
           files={userKitFiles}
           onAddFiles={onAddUserKitFiles}
@@ -245,7 +284,7 @@ export function ResultScreen({
         />
       )}
 
-      {showMatrix && (
+      {panel === "matrix" && (
         <MatrixEditor
           pattern={pattern}
           override={override}
@@ -257,7 +296,7 @@ export function ResultScreen({
         />
       )}
 
-      {showCrosshair && <CrosshairPanel pattern={pattern} control={crosshair} onChange={onCrosshairChange} />}
+      {panel === "live" && <CrosshairPanel pattern={pattern} control={crosshair} onChange={onCrosshairChange} />}
     </>
   );
 }
