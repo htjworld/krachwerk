@@ -7,7 +7,22 @@
     "inputPlaceholder": "SEED",
     "randomButton": "Generate a random seed",
     "traitsHeading": "Pick a mood (optional)",
-    "generateButton": "Generate"
+    "generateButton": "Generate",
+    "myKit": "MY KIT · {count}"
+  },
+  "artistFaces": {
+    "aria": {
+      "k": "Fill a Kraftwerk-style seed",
+      "d": "Fill a Delroy Edwards-style seed",
+      "f": "Fill a Fred again..-style seed",
+      "p": "Fill a Peggy Gou-style seed"
+    },
+    "label": {
+      "k": "KRAFTWERK",
+      "d": "DELROY EDWARDS",
+      "f": "FRED AGAIN..",
+      "p": "PEGGY GOU"
+    }
   },
   "traits": {
     "bassEmphasis": "Bass emphasis",
@@ -28,6 +43,7 @@
     "summaryVoices": "Bass {bass}, lead {lead}",
     "summaryLength": "Length {length}, {sections} sections",
     "summaryStructure": "Structure {structure}",
+    "summaryStyle": "Style {style}",
     "rendering": "Building",
     "stillRendering": "Still building the rest {pct}%",
     "seek": "Playback position",

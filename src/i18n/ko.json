@@ -7,7 +7,22 @@
     "inputPlaceholder": "SEED",
     "randomButton": "무작위로 만들기",
     "traitsHeading": "성향을 골라보세요 (선택)",
-    "generateButton": "생성"
+    "generateButton": "생성",
+    "myKit": "MY KIT · {count}"
+  },
+  "artistFaces": {
+    "aria": {
+      "k": "크라프트베르크 스타일 시드 채우기",
+      "d": "델로이 에드워즈 스타일 시드 채우기",
+      "f": "프레드 어게인 스타일 시드 채우기",
+      "p": "페기 구 스타일 시드 채우기"
+    },
+    "label": {
+      "k": "KRAFTWERK",
+      "d": "DELROY EDWARDS",
+      "f": "FRED AGAIN..",
+      "p": "PEGGY GOU"
+    }
   },
   "traits": {
     "bassEmphasis": "베이스 강조",
@@ -28,6 +43,7 @@
     "summaryVoices": "베이스 {bass}, 리드 {lead}",
     "summaryLength": "길이 {length}, 섹션 {sections}개",
     "summaryStructure": "구성 {structure}",
+    "summaryStyle": "스타일 {style}",
     "rendering": "만드는 중",
     "stillRendering": "뒷부분 만드는 중 {pct}%",
     "seek": "재생 위치",

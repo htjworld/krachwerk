@@ -40,6 +40,13 @@ function formatTime(seconds: number): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
 
+// resultScreen.summaryStyle(§13.8, 신규): open은 blueprintId를 그대로 대문자로 풀어 보여주고
+// (classicBuild → CLASSIC BUILD), 얼굴 스타일 코드는 ArtistFaces와 같은 이름을 쓴다.
+function styleLabel(pattern: Pattern, t: (path: string) => string): string {
+  if (pattern.style === "open") return pattern.blueprintId.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toUpperCase();
+  return t(`artistFaces.label.${pattern.style}`);
+}
+
 // 지금 어느 섹션을 지나고 있는지 보여주고, 끌어서 그 자리로 건너뛴다. 3분 내내 구성이
 // 바뀌는 게 이 트랙의 요점이라 섹션 경계도 바 위에 같이 찍는다.
 function TrackProgress({ player, pattern, tempo }: { player: Player; pattern: Pattern; tempo: number }) {
@@ -170,6 +177,8 @@ export function ResultScreen({
         <h1 className="device-heading">{t("resultScreen.generatedMessage")}</h1>
 
         <p className="track-summary">
+          {t("resultScreen.summaryStyle", { style: styleLabel(pattern, t) })}
+          <br />
           {t("resultScreen.summaryTempo", { tempo })}
           <br />
           {t("resultScreen.summaryScale", { scale: pattern.scale.name })}

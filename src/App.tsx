@@ -135,7 +135,7 @@ function AppContent() {
       <div className="ambient-bg">
         <div className="device-stack device-stack--wide">
           <Logo />
-          <SeedScreen onGenerate={handleGenerate} />
+          <SeedScreen onGenerate={handleGenerate} myKitCount={userKitFiles.length} />
         </div>
         <LanguageToggle />
       </div>
