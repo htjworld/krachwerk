@@ -2,9 +2,11 @@
 // 저장해서 쓰는 기능. 이 파일은 순수 로직만(분류, 슬롯 매핑) — 저장은 userKitStore.ts,
 // 화면은 UserKitPanel.tsx.
 
-export type UserSlot = "kick" | "snare" | "hat" | "perc" | "sig";
+// 260927 §10/§13: "voice" 신규 — f 스타일 chop(§6.4.1 소스 우선순위 1번)이 말소리·일상
+// 녹음이 있으면 CC0 풀·로봇 목소리보다 먼저 그걸 쓴다.
+export type UserSlot = "kick" | "snare" | "hat" | "perc" | "sig" | "voice";
 
-export const USER_SLOTS: readonly UserSlot[] = ["kick", "snare", "hat", "perc", "sig"];
+export const USER_SLOTS: readonly UserSlot[] = ["kick", "snare", "hat", "perc", "sig", "voice"];
 
 /** −50dB 이하를 무음으로 보고 앞뒤를 뺀 길이(초). 오디오 자체가 조용하면 원래 길이를 낸다. */
 function trimmedDuration(data: Float32Array, sampleRate: number): number {
@@ -44,13 +46,14 @@ function zeroCrossingRate(data: Float32Array, sampleRate: number): number {
 }
 
 /**
- * 사용자가 넣은 오디오를 슬롯 하나로 자동 분류한다(§15.4). 파일을 처음 넣을 때 한 번만
+ * 사용자가 넣은 오디오를 슬롯 하나로 자동 분류한다(§15.4, §10). 파일을 처음 넣을 때 한 번만
  * 쓴다 — 이후 사용자가 슬롯을 바꾸면 그 값을 그대로 저장한다.
- * 규칙(위에서부터 처음 맞는 것): 길다 → sig / 저음 많다 → kick / 영점 교차 많다(밝다) → hat /
- * 짧다 → snare / 나머지 → perc.
+ * 규칙(위에서부터 처음 맞는 것): 아주 길다(말소리·일상 녹음 길이) → voice / 길다 → sig /
+ * 저음 많다 → kick / 영점 교차 많다(밝다) → hat / 짧다 → snare / 나머지 → perc.
  */
 export function classifySample(data: Float32Array, sampleRate: number): UserSlot {
   const dur = trimmedDuration(data, sampleRate);
+  if (dur >= 2.0) return "voice";
   if (dur >= 0.6) return "sig";
   const low = lowEnergyRatio(data, sampleRate, 150);
   if (low > 0.5) return "kick";
@@ -70,4 +73,5 @@ export const ROLE_TO_USER_SLOT: Partial<Record<string, UserSlot>> = {
   perc: "perc",
   metal: "perc",
   sig: "sig",
+  chop: "voice",
 };

@@ -24,8 +24,8 @@ import {
 import { blueprintFor } from "./blueprints";
 import { legacyCue } from "./blueprints/legacy";
 import { targetSecondsFor, targetSecondsForStyle } from "./genome";
-import { hookPlan, styleBass, styleDrumMaps, styleRiff, type DrumMap, type HookNote } from "./styleMotifs";
-import { loadStyleKit } from "./drumSynth";
+import { chopPlan, hookPlan, styleBass, styleDrumMaps, styleRiff, type ChopNote, type DrumMap, type HookNote } from "./styleMotifs";
+import { loadStyleKit, loadSub808 } from "./drumSynth";
 import {
   computeBass,
   computeRiff,
@@ -1173,6 +1173,11 @@ export interface Rig {
   bassSidechain: GainNode | null;
   /** 260927 §7.7 신규. p `chop` 찬트 후크(2마디 고정 패턴). p가 아니면 null. */
   hookPlan: readonly HookNote[] | null;
+  /** 260927 §6.4.1/§7.7 신규. f `chop` 목소리 조각 계획(2마디 고정 패턴). f가 아니면 null. */
+  chopPlan: readonly ChopNote[] | null;
+  /** 260927 §6.4.1 신규. chop이 실제로 자를 소스 풀 — 내 소리 voice 슬롯 1개 또는 로봇
+   *  목소리 글자 버퍼들. 비어 있으면(둘 다 없으면) chop은 조용히 아무 소리도 안 낸다. */
+  chopPool: readonly AudioBuffer[];
 }
 
 export function scheduleBar(
@@ -1616,6 +1621,33 @@ function scheduleStyleBar(
     }
   }
 
+  // f 목소리 조각(chop, §6.4.1/§7.7): 2마디 고정 패턴(rig.chopPlan)을 barIndex%2로 고른다.
+  // hitSlice로 잘라 친다. 소스 풀이 비어 있으면(내 소리도 없고 로봇 목소리도 못 만들면)
+  // 조용히 아무것도 안 낸다.
+  if (rig.chopPlan && rig.chopPool.length > 0) {
+    const chopCue = cueFor(section, "chop", sectionBar);
+    if (
+      chopCue &&
+      !chopCue.skipBars?.includes(sectionBar) &&
+      (chopCue.barGate === undefined || hashRand(pattern.seedHash, BAR_GATE_SALT, barIndex, 14) < chopCue.barGate)
+    ) {
+      const barParity = barIndex % 2;
+      const pool = rig.chopPool;
+      for (const note of rig.chopPlan) {
+        if (Math.floor(note.at / 16) !== barParity) continue;
+        const step = note.at % 16;
+        if (!cueActiveAtStep(section, "chop", sectionBar, step)) continue;
+        const buffer = pool[note.sliceIndex % pool.length];
+        // 조각 풀이 하나뿐이면(내 소리 업로드 1개) 그 버퍼를 4등분해서 구간을 바꾼다.
+        // 여러 개면(로봇 목소리 글자별) 통째로 다른 버퍼를 고른다.
+        const segment = buffer.duration / 4;
+        const offset = pool.length === 1 ? (note.sliceIndex % 4) * segment : 0;
+        const dur = pool.length === 1 ? segment : buffer.duration;
+        drums.hitSlice("chop", buffer, offset, dur, atSynth(step), 0.7, note.rate);
+      }
+    }
+  }
+
   const applyFill = (kind: FillKind) => {
     // 16칸 전용 필(stepFill/roll13/halfBar8/pickup15)이 실수로 12칸 블루프린트에 붙어도
     // 격자 밖 스텝은 여기서 걸러진다(§6.2) — 이 필터 하나가 그 금지 규칙의 실제 강제 장치다.
@@ -1798,7 +1830,7 @@ async function buildRig(
             const b = metropolisBass(pattern.genome);
             return { cells: b.cells, gateBeats: b.gateBeats };
           })()
-        : pattern.style === "d" || pattern.style === "p"
+        : pattern.style === "d" || pattern.style === "p" || pattern.style === "f"
           ? (() => {
               const b = styleBass(pattern.blueprintId, pattern.styleGenome!, pattern.scale);
               return { cells: b.cells[0], gateBeats: b.gate };
@@ -1807,12 +1839,16 @@ async function buildRig(
   // p 찬트 후크(§7.7). 2마디(0~31, 16분 격자) 고정 패턴 — 마디마다 barIndex%2로 어느 마디의
   // 절반을 쓸지 고른다(scheduleStyleBar).
   const hookPlanResult = pattern.style === "p" ? hookPlan(pattern.styleGenome!) : null;
+  // f 목소리 조각(§6.4.1/§7.7). 리듬·속도 계획만 여기서 만든다 — 실제 소스(내 소리/로봇
+  // 목소리)는 voiceBank·userKitBuffers가 정해진 뒤 chopPool로 고른다.
+  const chopPlanResult = pattern.style === "f" ? chopPlan(pattern.styleGenome!) : null;
   // "calls" 큐: 기본 compute + k 스타일(codeRead 섹션, metropolisK는 pulseIntro/breakdown도)만
-  // 쓴다(§16.4, kraftwerkK.ts). 언어는 게놈 밖 — 곡 정체성과 무관하다.
+  // 쓴다(§16.4, kraftwerkK.ts). f는 chop의 로봇 목소리 폴백(§6.4.1 3번)으로 같은 글자별 버퍼를
+  // 재사용한다. 언어는 게놈 밖 — 곡 정체성과 무관하다.
   const voiceLang: VoiceLang = pattern.seedHash % 2 === 0 ? "de" : "en";
   const usesCalls =
     pattern.blueprintId === "compute" || pattern.blueprintId === "computeK" || pattern.blueprintId === "metropolisK";
-  const voiceBank = usesCalls ? await loadVoiceForCode(ctx, voiceLang, pattern.seedInput) : null;
+  const voiceBank = usesCalls || pattern.style === "f" ? await loadVoiceForCode(ctx, voiceLang, pattern.seedInput) : null;
 
   // 시그니처 사운드(§15.2): sigSlots가 있는 compute/metropolis 계열만, 곡 하나당 S2~S6 중 하나.
   // (S1 로봇 목소리는 이미 위 voiceBank/"calls" 큐가 맡는다.)
@@ -1857,6 +1893,19 @@ async function buildRig(
       ? blueprint.kitFamily
       : null;
   const styleKit = styleFamily ? await loadStyleKit(ctx.sampleRate, styleFamily, pattern.styleGenome?.kit ?? 0) : null;
+  // switchUp의 kitSwap: "sub808"(§6.3 f-3) 전용 킥 하나. kick 큐를 그대로 쓰고 킷만 바꾼다
+  // (styleMotifs.ts switchUpMaps 위 comment) — 그래서 kick 자리에도 넣어 둔다.
+  const sub808Kit =
+    pattern.blueprintId === "switchUp" ? { kick: await loadSub808(ctx.sampleRate) } : null;
+
+  const userKitBuffersResolved = await resolveUserKitBuffers(ctx, userKit, pattern.seedHash);
+  // f 목소리 조각(§6.4.1 소스 우선순위): 내 소리 voice 슬롯 > 로봇 목소리 풀(voiceBank의
+  // 글자별 버퍼들) > (CC0 말소리 풀은 §8.2 소싱 전이라 없음).
+  const chopPool: AudioBuffer[] = userKitBuffersResolved?.voice
+    ? [userKitBuffersResolved.voice]
+    : voiceBank
+      ? [...voiceBank.values()]
+      : [];
 
   const rig: Rig = {
     ctx,
@@ -1885,14 +1934,16 @@ async function buildRig(
     voiceBank,
     sigBuffer,
     synthKit,
-    userKitBuffers: await resolveUserKitBuffers(ctx, userKit, pattern.seedHash),
+    userKitBuffers: userKitBuffersResolved,
     tonalBuffer,
     blueprint,
     styleMaps,
     styleKit,
-    sub808Kit: null,
+    sub808Kit,
     bassSidechain,
     hookPlan: hookPlanResult,
+    chopPlan: chopPlanResult,
+    chopPool,
   };
 
   return { ctx, rig };

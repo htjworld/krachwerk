@@ -60,6 +60,8 @@ function buildFakeRig(pattern: Pattern) {
     sub808Kit: null,
     bassSidechain: null,
     hookPlan: null,
+    chopPlan: null,
+    chopPool: [],
   };
   return { rig, events: log.events };
 }

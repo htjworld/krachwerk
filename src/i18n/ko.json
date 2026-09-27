@@ -69,8 +69,10 @@
       "snare": "스네어",
       "hat": "햇",
       "perc": "퍼커션",
-      "sig": "시그니처"
-    }
+      "sig": "시그니처",
+      "voice": "목소리·일상 소리"
+    },
+    "voiceHint": "말소리나 주변 소리를 넣으면 FRED·DELROY 스타일 곡이 그걸 잘라 씁니다."
   },
   "matrix": {
     "drumTab": "DRUM",

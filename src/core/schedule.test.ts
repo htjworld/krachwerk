@@ -75,6 +75,8 @@ function scheduleOneBar(
     sub808Kit: null,
     bassSidechain: null,
     hookPlan: null,
+    chopPlan: null,
+    chopPool: [],
   };
   const rng = mulberry32(opts.rngSeed ?? 1);
   scheduleBar(rig, resolved, sectionBar, sectionBar, sectionBar * 16 * rig.stepDur, rng, opts.swing ?? 0);

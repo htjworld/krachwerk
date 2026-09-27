@@ -3,10 +3,10 @@ import { SCALES, type Scale } from "./scales";
 import { VOICES, type VoiceId } from "./voices";
 import { seedToGenome, kToV2Genome, type Genome, type StyleGenome } from "./genome";
 import { blueprintIdFor, legacyDrumVariantFor, legacyKickPattern, computeScale, metropolisScale } from "./motifs";
-import { blueprintFor, dBlueprintIdFor, kBlueprintIdFor, pBlueprintIdFor } from "./blueprints";
+import { blueprintFor, dBlueprintIdFor, fBlueprintIdFor, kBlueprintIdFor, pBlueprintIdFor } from "./blueprints";
 import { blueprintFamily, type BlueprintId } from "./blueprint";
 import type { StyleId } from "./blueprint";
-import { dScale, pScale } from "./styleMotifs";
+import { dScale, fScale, pScale } from "./styleMotifs";
 
 export const STEP_COUNT = 16;
 
@@ -169,7 +169,7 @@ function styleBlueprintIdFor(styleGenome: StyleGenome): BlueprintId {
     case "p":
       return pBlueprintIdFor(form);
     case "f":
-      throw new Error(`generatePattern: 스타일 "${styleGenome.style}"은 아직 구현되지 않았다`);
+      return fBlueprintIdFor(form);
   }
 }
 
@@ -192,6 +192,7 @@ function generateStylePattern(result: {
   // d: 화성이 사실상 고정(§4.1 D12)이라 dScale 하나, 보이스는 cheapSynth 고정(§13.5).
   // p: 화성은 prog(§7.4)가 정하고, 보이스는 블루프린트별로 고정(clubHouse sawUnison/square,
   // slowJam organBass/fmEPiano) — k처럼 timbre 비트로 후보를 고르지 않는다.
+  // f: 화성도 prog(§7.4)가 정하고, 보이스는 triSub/superPad 고정(§13.5).
   const timbre = styleGenome.timbre ?? 0;
   const scale =
     family === "metropolis"
@@ -200,7 +201,9 @@ function generateStylePattern(result: {
         ? computeScale(genome)
         : styleGenome.style === "p"
           ? pScale(styleGenome)
-          : dScale(styleGenome);
+          : styleGenome.style === "f"
+            ? fScale(styleGenome)
+            : dScale(styleGenome);
   const bassVoice: VoiceId =
     family === "metropolis"
       ? K_BASS_VOICES.metropolis[timbre & 1]
@@ -210,7 +213,9 @@ function generateStylePattern(result: {
           ? blueprintId === "slowJam"
             ? "organBass"
             : "sawUnison"
-          : "cheapSynth";
+          : styleGenome.style === "f"
+            ? "triSub"
+            : "cheapSynth";
   const leadVoice: VoiceId =
     family === "metropolis"
       ? K_LEAD_VOICES.metropolis[(timbre >> 1) & 1]
@@ -220,7 +225,9 @@ function generateStylePattern(result: {
           ? blueprintId === "slowJam"
             ? "fmEPiano"
             : "square"
-          : "cheapSynth";
+          : styleGenome.style === "f"
+            ? "superPad"
+            : "cheapSynth";
 
   const rng = mulberry32(seedHash);
   const { bass, lead } = fillLegacyBassLead(rng);

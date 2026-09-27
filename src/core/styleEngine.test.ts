@@ -116,6 +116,8 @@ function buildRig(
     sub808Kit: opts.sub808Kit ?? {},
     bassSidechain: opts.bassSidechain ?? null,
     hookPlan: null,
+    chopPlan: null,
+    chopPool: [],
   };
   return { rig, log };
 }

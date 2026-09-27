@@ -6,8 +6,9 @@ import { blueprintById, type OpenBlueprintId } from "./legacy";
 import { computeK, metropolisK } from "./kraftwerkK";
 import { beachDemo, dBlueprintIdFor, fourFloorJam, shuffle12, tapeJam } from "./delroy";
 import { clubHouse, pBlueprintIdFor, slowJam } from "./peggy";
+import { fBlueprintIdFor, garageShuffle, halfStep, switchUp } from "./fred";
 
-export { dBlueprintIdFor, pBlueprintIdFor };
+export { dBlueprintIdFor, pBlueprintIdFor, fBlueprintIdFor };
 
 const OPEN_IDS: readonly OpenBlueprintId[] = ["compute", "metropolis", "classicBuild", "slowBurn", "doubleDrop"];
 
@@ -43,6 +44,12 @@ export function blueprintFor(id: BlueprintId): Blueprint {
       return clubHouse;
     case "slowJam":
       return slowJam;
+    case "garageShuffle":
+      return garageShuffle;
+    case "halfStep":
+      return halfStep;
+    case "switchUp":
+      return switchUp;
     default:
       throw new Error(`blueprintFor: 아직 구현되지 않은 블루프린트 id "${id}"`);
   }

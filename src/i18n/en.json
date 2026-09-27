@@ -69,8 +69,10 @@
       "snare": "Snare",
       "hat": "Hat",
       "perc": "Percussion",
-      "sig": "Signature"
-    }
+      "sig": "Signature",
+      "voice": "Voice & everyday sounds"
+    },
+    "voiceHint": "Add speech or room sounds and FRED/DELROY-style tracks will chop them."
   },
   "matrix": {
     "drumTab": "DRUM",

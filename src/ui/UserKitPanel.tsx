@@ -52,6 +52,7 @@ export function UserKitPanel({ files, onAddFiles, onRemoveFile, onUpdateSlot, on
     <div className="device">
       <h2 className="device-heading">{t("userKit.title")}</h2>
       <p className="device-subheading">{t("userKit.notice")}</p>
+      <p className="device-subheading">{t("userKit.voiceHint")}</p>
       {!isPersistent() && <p className="device-error">{t("userKit.notPersistent")}</p>}
 
       <div
