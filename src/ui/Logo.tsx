@@ -34,7 +34,9 @@ export function Logo() {
 
   return (
     <div className="logo-wrap">
-      <pre className="logo-ascii" data-lang={lang} aria-hidden="true">
+      {/* key={lang}: 언어가 바뀌면 줄을 새로 만들어 부팅 애니메이션을 처음부터 다시 돌린다.
+          없으면 React가 앞쪽 줄 span을 재사용해서 새로 생긴 뒷줄만 나타난다. */}
+      <pre key={lang} className="logo-ascii" data-lang={lang} aria-hidden="true">
         {lines.map((line, i) => (
           <span
             key={i}
