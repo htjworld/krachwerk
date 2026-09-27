@@ -2,7 +2,7 @@ import { mulberry32, pick } from "./prng";
 import { SCALES, type Scale } from "./scales";
 import { VOICES, type VoiceId } from "./voices";
 import { seedToGenome, kToV2Genome, type Genome, type StyleGenome } from "./genome";
-import { blueprintIdFor, legacyDrumVariantFor, legacyKickPattern, computeScale, metropolisScale } from "./motifs";
+import { LEGACY_IDS, legacyDrumVariantFor, legacyKickPattern, computeScale, metropolisScale } from "./motifs";
 import { blueprintFor, dBlueprintIdFor, fBlueprintIdFor, kBlueprintIdFor, pBlueprintIdFor } from "./blueprints";
 import { blueprintFamily, type BlueprintId } from "./blueprint";
 import type { StyleId } from "./blueprint";
@@ -17,16 +17,16 @@ export interface StepCell {
 
 export interface Pattern {
   /**
-   * 정규 시드 코드. 기본 코드([0-9a-z]{8}) 또는 스타일 코드([kdpf][0-9a-z]{15}). 입력이 그
-   * 형식이 아니었으면 canonicalize한 결과(기본 코드)다.
+   * 정규 시드 코드([0-9a-z]{10}, 첫 글자가 장르). 입력이 그 형식이 아니었으면
+   * canonicalize한 결과다.
    */
   seedInput: string;
-  /** 게놈 밖 무작위성(보이스, 텍스처 비트 등)에 계속 쓰는 값. 260927: open은 genome.n %
-   *  2^32 그대로(불변), 스타일 코드는 styleFeistel 결과(P) % 2^32다(genome.ts seedToGenome). */
+  /** 게놈 밖 무작위성(보이스, 텍스처 비트 등)에 계속 쓰는 값. Feistel로 섞은 번호 P % 2^32
+   *  (genome.ts seedToGenome). */
   seedHash: number;
-  /** 260927 §13.5 신규. 어느 시드 가족인지 — open(기본 8자) 또는 얼굴 버튼 스타일 4종. */
+  /** 어느 장르인지 — open(테크노) 또는 스타일 4종(k/d/p/f). */
   style: StyleId;
-  /** 시드 코드가 결정하는 정체성 필드 9개 (§9.2). style==="open"이면 실제 게놈이고,
+  /** 정체성 필드 9개 (§9.2). style==="open"이면 실제 게놈이고,
    *  스타일 코드는 kToV2Genome로 공통 필드만 채운 값(나머지 0)이다 — 이름이 같은 v2
    *  함수(computeScale 등)가 그대로 동작하게 하는 어댑터다(§13.5). 실제 음악 결정은
    *  스타일 코드일 때 styleGenome에서 한다. */
@@ -34,7 +34,7 @@ export interface Pattern {
   /** 260927 §13.5 신규. style이 "open"이면 null, 스타일 코드면 그 스타일의 원본 게놈
    *  (form/kit/voice/sig/timbre/tape/sample/hook/chop 등 스타일 전용 필드를 담는다). */
   styleGenome: StyleGenome | null;
-  /** genome.blueprint(g1)로 고른 블루프린트(open) 또는 styleGenome.form으로 고른
+  /** genome.blueprint로 고른 legacy 블루프린트(open) 또는 styleGenome.form으로 고른
    *  블루프린트(스타일 코드). */
   blueprintId: BlueprintId;
   /** 크로스헤어 단위(104~132 폭) 템포. 실제 BPM은 `effectiveTempo(pattern, control)`처럼
@@ -101,25 +101,23 @@ function fillLegacyBassLead(rng: () => number): { bass: StepCell[]; lead: StepCe
 }
 
 // 시드 문자열 하나로 완전히 결정되는 트랙. 태그(traits.ts)는 이 함수의 입력이 아니라
-// 이 함수의 결과를 검사해서 원하는 후보 시드를 고르는 필터로만 쓰인다.
-//
-// 정규 코드가 아닌 입력(자유 텍스트)은 canonicalize해서 쓴다(§9.3) — 그래서 open 경로의
-// seedInput은 항상 기본 정규 코드다. 스타일 코드([kdpf]+15자)는 §5.1 해석 순서에 따라
-// 절대 canonicalize를 거치지 않는다(얼굴 버튼을 눌러야만 스타일이 된다, 요구 6).
+// 이 함수의 결과를 검사해서 원하는 후보 시드를 고르는 필터로만 쓰인다. 정규 코드가 아닌
+// 입력(자유 텍스트)은 canonicalize해서 다섯 장르 중 하나의 코드가 된다.
 export function generatePattern(seedInput: string): Pattern {
   const result = seedToGenome(seedInput);
   return result.family === "open" ? generateOpenPattern(result) : generateStylePattern(result);
 }
 
-// ---------------------------------------------------------------- open(기본 코드, 불변)
+// ---------------------------------------------------------------- open(테크노 장르)
 
 /**
- * §12 단계 0 스냅샷이 보증하는 경로. genomeFromCode(v2) 시절과 완전히 같은 순서로 같은
- * rng를 소비한다 — 여기 한 줄이라도 달라지면 기존 공유 링크가 다른 곡을 낸다(R9 위반).
+ * 테크노 장르: legacy 블루프린트 3종(classicBuild/slowBurn/doubleDrop). compute/metropolis는
+ * Kraftwerk 장르(computeK/metropolisK)로 합쳤다. open-code 스냅샷이 이 경로의 회귀를 잡는다 —
+ * 여기서 rng 소비 순서가 한 줄이라도 달라지면 공유 링크가 다른 곡을 낸다.
  */
-function generateOpenPattern(result: { code: string; genome: Genome; n: number; seedHash: number }): Pattern {
+function generateOpenPattern(result: { code: string; genome: Genome; seedHash: number }): Pattern {
   const { code, genome, seedHash } = result;
-  const blueprintId = blueprintIdFor(genome.blueprint);
+  const blueprintId = LEGACY_IDS[genome.blueprint];
   const rng = mulberry32(seedHash);
 
   const tempo = 104 + Math.floor(rng() * 29);

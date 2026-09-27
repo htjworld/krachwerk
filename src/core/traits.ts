@@ -1,5 +1,6 @@
 import { generatePattern, type Pattern } from "./pattern";
 import { VOICES } from "./voices";
+import { randomCode } from "./seedCode";
 
 export type MelodyStyle = "minimal" | "elaborate" | null;
 
@@ -36,7 +37,7 @@ export function traitsMatch(pattern: Pattern, traits: TraitSelection): boolean {
 }
 
 export function randomSeedCandidate(): string {
-  return Math.random().toString(36).slice(2, 10);
+  return randomCode();
 }
 
 // 성향 태그에 맞는 결과가 나올 때까지 무작위 후보 시드를 계속 뽑는다 (4.2).

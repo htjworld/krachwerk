@@ -1,10 +1,7 @@
-// §12 단계 0: 기본 코드(8자) 회귀 스냅샷. "기존 링크는 전부 같은 곡" 약속의 증거다
-// (v2 §11 단계 2의 스냅샷 방식과 같다, eventLog.ts 재사용). 고정 코드 20개로 실제
-// scheduleBar를 오디오 컨텍스트 없이 돌려서 이벤트 목록의 개수 + FNV-1a64 다이제스트를
-// 낸 뒤 __fixtures__/open-code-snapshot.json과 비교한다.
-//
-// 이 테스트가 한 번이라도 깨지면(단계 1~11 어디서든) 기본 코드 경로가 바뀐 것이다 —
-// 금지 목록(§13.11) 위반이니 멈추고 원인을 찾는다.
+// 테크노 장르(open) 회귀 스냅샷. 고정 코드 20개로 실제 scheduleBar를 오디오 컨텍스트 없이
+// 돌려서 이벤트 목록의 개수 + FNV-1a64 다이제스트를 낸 뒤 __fixtures__/open-code-snapshot.json과
+// 비교한다(eventLog.ts 재사용). 이 테스트가 깨지면 같은 공유 링크가 다른 곡을 낸다는 뜻이니
+// 의도한 변경이 아니면 원인을 찾는다.
 import { describe, expect, it } from "vitest";
 import fixture from "./__fixtures__/open-code-snapshot.json";
 import { generatePattern, type Pattern } from "./pattern";
@@ -14,21 +11,22 @@ import { mulberry32 } from "./prng";
 import { deriveTrack } from "./track";
 import { resolveLayers } from "./patternOverride";
 import { computeBass, computeRiff, computeScale, metropolisBass, metropolisScale, metropolisSeq } from "./motifs";
-import { CODE_SPACE, encodeCode } from "./seedCode";
+import { encodeSeed, familySpace } from "./seedCode";
 import { blueprintFor } from "./blueprints";
 
-// seedCode.test.ts/genome.test.ts와 같은 방식의 결정론적 표본 — 항상 유효한 8자 정규 코드.
+// 결정론적 표본 — 항상 유효한 테크노(open) 장르 코드.
 function sampleCodes(count: number): string[] {
   const out: string[] = [];
+  const space = familySpace("open");
   let a = 0x9e3779b9;
   for (let i = 0; i < count; i++) {
     a = (Math.imul(a, 1103515245) + 12345) >>> 0;
-    out.push(encodeCode(a % CODE_SPACE));
+    out.push(encodeSeed("open", (BigInt(a) * 0x9e3779b97n) % space));
   }
   return out;
 }
 
-export const SNAPSHOT_CODES: readonly string[] = ["00000000", "zzzzzzzz", ...sampleCodes(18)];
+export const SNAPSHOT_CODES: readonly string[] = ["t000000000", "zzzzzzzzzz", ...sampleCodes(18)];
 
 function buildFakeRig(pattern: Pattern): { rig: Rig; events: LoggedEvent[] } {
   const track = deriveTrack(pattern);
@@ -136,7 +134,7 @@ interface SnapshotEntry {
   digest: string;
 }
 
-describe("기본 코드(8자) 회귀 스냅샷 (§12 단계 0)", () => {
+describe("테크노 장르 회귀 스냅샷", () => {
   const entries = fixture as SnapshotEntry[];
 
   it("고정된 코드 20개와 정확히 같다", () => {

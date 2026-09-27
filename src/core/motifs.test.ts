@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  blueprintIdFor,
   burst16Mask,
   computeBass,
   computeRiff,
@@ -24,23 +23,7 @@ import {
   pulse2Steps,
 } from "./motifs";
 import { euclideanPattern } from "./blueprint";
-import { RADICES, indexToGenome, type Genome } from "./genome";
-
-describe("blueprintIdFor (§8.1)", () => {
-  it("15개 값 전부 유효한 블루프린트 id를 낸다", () => {
-    for (let g1 = 0; g1 < RADICES[0]; g1++) {
-      expect(["compute", "metropolis", "classicBuild", "slowBurn", "doubleDrop"]).toContain(blueprintIdFor(g1));
-    }
-  });
-
-  it("0–5는 compute, 6–11은 metropolis, 12/13/14는 legacy 3종이다 (40/40/20 비중)", () => {
-    for (let g1 = 0; g1 <= 5; g1++) expect(blueprintIdFor(g1)).toBe("compute");
-    for (let g1 = 6; g1 <= 11; g1++) expect(blueprintIdFor(g1)).toBe("metropolis");
-    expect(blueprintIdFor(12)).toBe("classicBuild");
-    expect(blueprintIdFor(13)).toBe("slowBurn");
-    expect(blueprintIdFor(14)).toBe("doubleDrop");
-  });
-});
+import type { Genome } from "./genome";
 
 describe("legacyDrumVariantFor (§16.4 표, legacy 열, §11 단계 5)", () => {
   it("256개 값 전부 유효한 범위 안에서 나온다", () => {
@@ -113,10 +96,20 @@ describe("euclideanPattern (§14.2 H)", () => {
   });
 });
 
-// 필드 몇 개만 지정하고 나머지는 0으로 채운 게놈. indexToGenome(0)이 전부 0인 게놈을
-// 주므로 그 위에 override만 얹는다 — 순서 상관없이 항상 유효한 게놈이 나온다.
+// 필드 몇 개만 지정하고 나머지는 0으로 채운 게놈.
+const ZERO_GENOME: Genome = {
+  blueprint: 0,
+  length: 0,
+  key: 0,
+  mode: 0,
+  tempo: 0,
+  bassShape: 0,
+  drumVariant: 0,
+  riffRhythm: 0,
+  riffPitch: 0,
+};
 function fakeGenome(override: Partial<Genome>): Genome {
-  return { ...indexToGenome(0), ...override };
+  return { ...ZERO_GENOME, ...override };
 }
 
 describe("compute 조성·리프·베이스 (§16.4)", () => {

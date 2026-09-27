@@ -9,7 +9,7 @@ import { applyFFormVariant, garageShuffle, halfStep, switchUp } from "./fred";
 
 describe("open/k는 resolvedBlueprintFor에서도 건드리지 않는다(R9)", () => {
   it("styleGenome이 null이면 blueprintFor와 완전히 같은 참조를 돌려준다", () => {
-    const pattern = generatePattern("krachwerk");
+    const pattern = generatePattern("t000000000"); // t = 테크노(open) 장르
     expect(pattern.styleGenome).toBeNull();
     expect(resolvedBlueprintFor(pattern)).toBe(blueprintFor(pattern.blueprintId));
   });

@@ -1,80 +1,92 @@
 import { describe, expect, it } from "vitest";
-import { CODE_SPACE, STYLE_CODE_SPACE, STYLE_LETTERS, feistel } from "./seedCode";
+import { SEED_FAMILIES, encodeSeed, familyFeistelInverse, familySpace, type SeedFamily } from "./seedCode";
 import {
+  GENRE_SPECS,
   LENGTH_FIELD_RADIX,
-  RADICES,
-  STYLE_GENOME_SPECS,
-  STYLE_RADIX_PRODUCT,
   TARGET_LENGTHS_SECONDS,
-  genomeFromCode,
-  genomeToIndex,
-  indexToGenome,
+  decodeGenomeFields,
+  encodeGenomeFields,
+  genomePrefix,
   kToV2Genome,
   seedToGenome,
-  styleGenomeToIndex,
-  styleIndexToGenome,
   targetSecondsForStyle,
 } from "./genome";
 
-// seedCode.test.ts와 같은 방식의 결정론적 표본.
-function sampleIndices(count: number): number[] {
-  const out: number[] = [];
-  let a = 0x1234abcd;
+function sample(count: number, space: bigint, seed = 0x1234abcd): bigint[] {
+  const out: bigint[] = [];
+  let a = BigInt(seed);
   for (let i = 0; i < count; i++) {
-    a = (Math.imul(a, 1103515245) + 12345) >>> 0;
-    out.push(a % CODE_SPACE);
+    a = (a * 6364136223846793005n + 1442695040888963407n) & ((1n << 64n) - 1n);
+    out.push(a % space);
   }
   return out;
 }
 
-describe("RADICES", () => {
-  it("곱이 CODE_SPACE보다 크다 (§9.2 유일성 조건)", () => {
-    const product = RADICES.reduce((a, b) => a * b, 1);
-    expect(product).toBeGreaterThanOrEqual(CODE_SPACE);
+describe.each(SEED_FAMILIES)("%s 장르 게놈", (family: SeedFamily) => {
+  const space = familySpace(family);
+  const spec = GENRE_SPECS[family];
+  const { count, product } = genomePrefix(space, spec);
+  const total = spec.reduce((acc, [, r]) => acc * BigInt(r), 1n);
+
+  it("필드 전체의 곱이 장르 공간보다 커서, 서로 다른 코드가 같은 게놈이 될 수 없다", () => {
+    expect(total >= space).toBe(true);
+  });
+
+  // 오프셋이 뒤쪽 필드의 모든 값을 훑으려면 앞쪽 필드 조합 수가 뒤쪽 기수 각각 이상이어야 한다.
+  it("앞쪽 필드 조합 수가 뒤쪽 필드 기수보다 커서, 모든 필드의 모든 값이 나온다", () => {
+    for (const [, radix] of spec.slice(count)) expect(product >= BigInt(radix)).toBe(true);
+  });
+
+  // 멜로디 세부(riffRhythm, riffPitch)를 뺀 핵심 필드 조합이 전부 공간에 들어간다.
+  it("멜로디 세부 앞까지의 필드는 모든 조합이 다 나온다", () => {
+    const riffAt = spec.findIndex(([field]) => field === "riffRhythm");
+    expect(count).toBeGreaterThanOrEqual(riffAt);
+  });
+
+  it("0, 끝, 무작위 2만 개를 왕복하고 모든 필드가 기수 안에 있다", () => {
+    for (const p of [0n, space - 1n, ...sample(20_000, space)]) {
+      const values = decodeGenomeFields(p, space, spec);
+      for (const [field, radix] of spec) {
+        expect(values[field]).toBeGreaterThanOrEqual(0);
+        expect(values[field]).toBeLessThan(radix);
+      }
+      expect(encodeGenomeFields(values, space, spec)).toBe(p);
+    }
+  });
+
+  // 실제로 겪은 버그의 회귀 테스트: 옛 혼합 기수 분해에서는 공간을 넘는 뒤쪽 필드가 모든
+  // 시드에서 항상 0이었다. 무작위 표본에서 뒤쪽 필드도 넓게 흩어져야 한다.
+  it("뒤쪽 필드도 무작위 표본에서 넓게 흩어진다", () => {
+    const samples = sample(4_000, space, 99).map((p) => decodeGenomeFields(p, space, spec));
+    for (const [field, radix] of spec) {
+      const distinct = new Set(samples.map((v) => v[field])).size;
+      expect(distinct).toBeGreaterThan(Math.min(radix, 4_000) * 0.5);
+    }
   });
 });
 
-describe("indexToGenome / genomeToIndex", () => {
-  it("0, CODE_SPACE-1, 무작위 10만 개를 왕복한다", () => {
-    const cases = [0, CODE_SPACE - 1, ...sampleIndices(100_000)];
-    for (const p of cases) {
-      expect(genomeToIndex(indexToGenome(p))).toBe(p);
+describe("seedToGenome", () => {
+  it("장르 안 번호를 Feistel로 섞은 값(P)을 게놈으로 푼다", () => {
+    for (const family of SEED_FAMILIES) {
+      const code = encodeSeed(family, 777n);
+      const result = seedToGenome(code);
+      expect(result.family).toBe(family);
+      expect(result.code).toBe(code);
+      expect(familyFeistelInverse(family, result.n)).toBe(777n);
+      expect(result.seedHash).toBe(Number(result.n % 2n ** 32n));
     }
   });
 
-  it("모든 필드가 자기 기수 안에 있다", () => {
-    for (const p of [0, CODE_SPACE - 1, ...sampleIndices(1000)]) {
-      const g = indexToGenome(p);
-      expect(g.blueprint).toBeGreaterThanOrEqual(0);
-      expect(g.blueprint).toBeLessThan(RADICES[0]);
-      expect(g.length).toBeGreaterThanOrEqual(0);
-      expect(g.length).toBeLessThan(LENGTH_FIELD_RADIX);
-    }
+  it("스타일 장르는 styleGenome에 장르 글자를 담는다", () => {
+    const result = seedToGenome("d123456789");
+    expect(result.family).toBe("d");
+    if (result.family === "open") throw new Error("d는 스타일 장르다");
+    expect(result.styleGenome.style).toBe("d");
   });
 
-  it("서로 다른 인덱스는 반드시 서로 다른 게놈이다 (무작위 10만 개, 지문 중복 없음)", () => {
-    const seen = new Set<string>();
-    for (const p of sampleIndices(100_000)) {
-      seen.add(JSON.stringify(indexToGenome(p)));
-    }
-    expect(seen.size).toBe(100_000);
-  });
-
-  // 실제로 겪은 버그의 회귀 테스트: §9.2가 처음 적어 둔 필드 순서([blueprint, key, mode,
-  // tempo, riffRhythm, riffPitch, bassShape, drumVariant, length])로는 riffRhythm·riffPitch가
-  // 이미 CODE_SPACE를 넘어버려서 bassShape·drumVariant·length가 모든 시드에서 항상 0이었다
-  // (§11 단계 4 구현 중 실측). 필드 순서를 바꿔서 고쳤다 — 이 테스트가 다시 깨지면
-  // 순서를 되돌린 것이다.
-  it("blueprint·length·key·mode·tempo·bassShape·drumVariant는 무작위 표본에서 넓게 흩어진다", () => {
-    const samples = sampleIndices(2000).map(indexToGenome);
-    const spread = (values: number[]) => new Set(values).size;
-    expect(spread(samples.map((g) => g.blueprint))).toBeGreaterThan(10); // 기수 15
-    expect(spread(samples.map((g) => g.length))).toBeGreaterThan(10); // 기수 13 — 예전엔 항상 1(=0)
-    expect(spread(samples.map((g) => g.key))).toBeGreaterThan(10); // 기수 12
-    expect(spread(samples.map((g) => g.mode))).toBe(4); // 기수 4, 표본 2000개면 전부 나온다
-    expect(spread(samples.map((g) => g.tempo))).toBeGreaterThan(14); // 기수 16
-    expect(spread(samples.map((g) => g.bassShape))).toBeGreaterThan(50); // 기수 64 — 예전엔 항상 1(=0)
-    expect(spread(samples.map((g) => g.drumVariant))).toBeGreaterThan(200); // 기수 256 — 예전엔 항상 1(=0)
+  it("같은 코드는 항상 같은 결과, 한 글자만 달라도 게놈이 달라진다", () => {
+    expect(seedToGenome("k0a1b2c3d4")).toEqual(seedToGenome("k0a1b2c3d4"));
+    expect(seedToGenome("k0a1b2c3d4")).not.toEqual(seedToGenome("k0a1b2c3d5"));
   });
 });
 
@@ -83,92 +95,6 @@ describe("TARGET_LENGTHS_SECONDS (§8.2)", () => {
     expect(TARGET_LENGTHS_SECONDS).toHaveLength(LENGTH_FIELD_RADIX);
     expect(TARGET_LENGTHS_SECONDS[0]).toBe(150);
     expect(TARGET_LENGTHS_SECONDS[TARGET_LENGTHS_SECONDS.length - 1]).toBe(210);
-    for (let i = 1; i < TARGET_LENGTHS_SECONDS.length; i++) {
-      expect(TARGET_LENGTHS_SECONDS[i] - TARGET_LENGTHS_SECONDS[i - 1]).toBe(5);
-    }
-  });
-});
-
-describe("genomeFromCode", () => {
-  it("정규 코드가 아닌 입력을 canonicalize해서 쓴다", () => {
-    const { code } = genomeFromCode("hello");
-    expect(code).toMatch(/^[0-9a-z]{8}$/);
-  });
-
-  it("n은 decodeCode를 feistel로 섞은 값이다", () => {
-    const { n } = genomeFromCode("00000000");
-    expect(n).toBe(feistel(0));
-  });
-
-  it("같은 입력은 항상 같은 게놈을 낸다", () => {
-    expect(genomeFromCode("krachwerk")).toEqual(genomeFromCode("krachwerk"));
-  });
-});
-
-// 결정론적 BigInt 표본 (seedCode.test.ts와 같은 LCG).
-function sampleBigInts(count: number, space: bigint): bigint[] {
-  const out: bigint[] = [];
-  let a = 0x1234abcd9e3779b9n;
-  const M = 1n << 64n;
-  for (let i = 0; i < count; i++) {
-    a = (a * 6364136223846793005n + 1442695040888963407n) & (M - 1n);
-    out.push(a % space);
-  }
-  return out;
-}
-
-describe("STYLE_RADIX_PRODUCT (§5.2 조건)", () => {
-  it.each(STYLE_LETTERS)("%s: 곱이 STYLE_CODE_SPACE(36^15) 이상이다 (조건①: 유일성)", (style) => {
-    expect(STYLE_RADIX_PRODUCT[style]).toBeGreaterThanOrEqual(STYLE_CODE_SPACE);
-  });
-
-  it.each(STYLE_LETTERS)("%s: 마지막 필드(riffPitch)를 뺀 곱은 STYLE_CODE_SPACE 이하다 (조건②: 앞 필드 전 범위)", (style) => {
-    const spec = STYLE_GENOME_SPECS[style];
-    const withoutLast = spec.slice(0, -1).reduce((acc, [, r]) => acc * BigInt(r), 1n);
-    expect(withoutLast).toBeLessThanOrEqual(STYLE_CODE_SPACE);
-  });
-});
-
-describe("styleIndexToGenome / styleGenomeToIndex (§13.3)", () => {
-  it.each(STYLE_LETTERS)("%s: 0n, space-1, 무작위 10만 개를 왕복한다", (style) => {
-    const space = STYLE_CODE_SPACE;
-    const cases = [0n, space - 1n, ...sampleBigInts(100_000, space)];
-    for (const p of cases) {
-      expect(styleGenomeToIndex(styleIndexToGenome(style, p))).toBe(p);
-    }
-  });
-
-  it.each(STYLE_LETTERS)("%s: 모든 필드가 자기 기수 안에 있다", (style) => {
-    const spec = STYLE_GENOME_SPECS[style];
-    for (const p of [0n, STYLE_CODE_SPACE - 1n, ...sampleBigInts(1000, STYLE_CODE_SPACE)]) {
-      const g = styleIndexToGenome(style, p);
-      for (const [field, radix] of spec) {
-        expect(g[field]).toBeGreaterThanOrEqual(0);
-        expect(g[field]).toBeLessThan(radix);
-      }
-    }
-  });
-
-  it.each(STYLE_LETTERS)("%s: 서로 다른 인덱스는 반드시 서로 다른 게놈이다 (무작위 5만 개, 지문 중복 없음)", (style) => {
-    const seen = new Set<string>();
-    for (const p of sampleBigInts(50_000, STYLE_CODE_SPACE)) {
-      seen.add(JSON.stringify(styleIndexToGenome(style, p)));
-    }
-    expect(seen.size).toBe(50_000);
-  });
-
-  // v2 §16.3 버그(genome.test.ts 위쪽 참고)가 스타일 게놈에서 재발하지 않는지: riffPitch를
-  // 뺀 모든 필드가 무작위 표본에서 넓게 흩어져야 한다.
-  it.each(STYLE_LETTERS)("%s: riffPitch를 뺀 모든 필드가 무작위 표본에서 넓게 흩어진다", (style) => {
-    const spec = STYLE_GENOME_SPECS[style];
-    const samples = sampleBigInts(3000, STYLE_CODE_SPACE).map((p) => styleIndexToGenome(style, p));
-    for (const [field, radix] of spec) {
-      if (field === "riffPitch") continue;
-      const spread = new Set(samples.map((g) => g[field])).size;
-      // 기수가 작으면(예: mode=4) 표본 3000개에서 거의 다 나오고, 크면(예: kit=384) 다양성만 확인한다.
-      const expectedMin = Math.min(radix, 30);
-      expect(spread).toBeGreaterThan(expectedMin * 0.5);
-    }
   });
 });
 
@@ -182,63 +108,13 @@ describe("targetSecondsForStyle (§5.4)", () => {
 
 describe("kToV2Genome (§13.3)", () => {
   it("form이 blueprint로, 나머지 이름 같은 필드는 그대로 옮겨진다", () => {
-    const styleGenome = styleIndexToGenome("k", 123456789n);
-    const v2 = kToV2Genome(styleGenome);
-    expect(v2.blueprint).toBe(styleGenome.form);
-    expect(v2.length).toBe(styleGenome.length);
-    expect(v2.key).toBe(styleGenome.key);
-    expect(v2.mode).toBe(styleGenome.mode);
-    expect(v2.tempo).toBe(styleGenome.tempo);
-    expect(v2.bassShape).toBe(styleGenome.bassShape);
-    expect(v2.drumVariant).toBe(styleGenome.drumVariant);
-    expect(v2.riffRhythm).toBe(styleGenome.riffRhythm);
-    expect(v2.riffPitch).toBe(styleGenome.riffPitch);
-  });
-
-  it("form(0~11)이 blueprintIdFor의 compute(0~5)/metropolis(6~11) 판정과 그대로 맞는다", () => {
-    for (let form = 0; form <= 11; form++) {
-      const v2 = kToV2Genome({ style: "k", form });
-      expect(v2.blueprint).toBe(form);
+    const result = seedToGenome("k123456789");
+    if (result.family !== "k") throw new Error("k 장르여야 한다");
+    const g = result.styleGenome;
+    const v2 = kToV2Genome(g);
+    expect(v2.blueprint).toBe(g.form);
+    for (const field of ["length", "key", "mode", "tempo", "bassShape", "drumVariant", "riffRhythm", "riffPitch"] as const) {
+      expect(v2[field]).toBe(g[field]);
     }
-  });
-});
-
-describe("seedToGenome (§5.3)", () => {
-  it("open 코드는 genomeFromCode와 완전히 같은 결과를 낸다", () => {
-    const result = seedToGenome("krachwerk");
-    const expected = genomeFromCode("krachwerk");
-    expect(result.family).toBe("open");
-    if (result.family === "open") {
-      expect(result.code).toBe(expected.code);
-      expect(result.genome).toEqual(expected.genome);
-      expect(result.n).toBe(expected.n);
-      expect(result.seedHash).toBe(expected.n % 2 ** 32);
-    }
-  });
-
-  it("스타일 코드는 그 스타일의 styleGenome을 낸다", () => {
-    for (const style of STYLE_LETTERS) {
-      const code = style + "1".repeat(15);
-      const result = seedToGenome(code);
-      expect(result.family).toBe(style);
-      if (result.family !== "open") {
-        expect(result.styleGenome.style).toBe(style);
-        expect(result.code).toBe(code);
-        expect(Number.isInteger(result.seedHash)).toBe(true);
-        expect(result.seedHash).toBeGreaterThanOrEqual(0);
-      }
-    }
-  });
-
-  it("같은 스타일 코드는 항상 같은 결과를 낸다", () => {
-    const a = seedToGenome("d000000000000001");
-    const b = seedToGenome("d000000000000001");
-    expect(a).toEqual(b);
-  });
-
-  it("스타일 코드 하나만 달라도 게놈이 달라진다", () => {
-    const a = seedToGenome("d000000000000001");
-    const b = seedToGenome("d000000000000002");
-    expect(a).not.toEqual(b);
   });
 });

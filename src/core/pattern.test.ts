@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { generatePattern } from "./pattern";
 import { findSeedForTraits, traitsMatch } from "./traits";
 import { canonicalize, isCanonical } from "./seedCode";
-import { genomeFromCode } from "./genome";
+import { seedToGenome } from "./genome";
 
 describe("generatePattern", () => {
   it("is fully deterministic for the same seed", () => {
@@ -41,7 +41,7 @@ describe("generatePattern", () => {
   // §11 단계 4: 게놈 연결.
   describe("게놈 연결 (§11 단계 4)", () => {
     it("seedInput은 항상 정규 코드다 (자유 텍스트는 canonicalize된다)", () => {
-      for (const seed of ["krachwerk", "133r53252rwersa", "hello world", "00000000"]) {
+      for (const seed of ["krachwerk", "133r53252rwersa", "hello world", "0000000000"]) {
         const pattern = generatePattern(seed);
         expect(isCanonical(pattern.seedInput)).toBe(true);
         expect(pattern.seedInput).toBe(canonicalize(seed));
@@ -49,17 +49,19 @@ describe("generatePattern", () => {
     });
 
     it("이미 정규 코드인 입력은 그대로 seedInput이 된다", () => {
-      const code = "3k9x0a2b";
+      const code = "t3k9x0a2bq";
       expect(isCanonical(code)).toBe(true);
       expect(generatePattern(code).seedInput).toBe(code);
     });
 
-    it("genome/blueprintId가 genomeFromCode와 같은 값이다", () => {
-      const pattern = generatePattern("krachwerk");
-      const { genome, n } = genomeFromCode("krachwerk");
-      expect(pattern.genome).toEqual(genome);
-      expect(pattern.seedHash).toBe(n % 2 ** 32);
-      expect(["compute", "metropolis", "classicBuild", "slowBurn", "doubleDrop"]).toContain(pattern.blueprintId);
+    it("테크노 코드의 genome/seedHash가 seedToGenome과 같고, legacy 블루프린트만 쓴다", () => {
+      const code = "t000000000";
+      const pattern = generatePattern(code);
+      const result = seedToGenome(code);
+      if (result.family !== "open") throw new Error("t는 테크노 장르여야 한다");
+      expect(pattern.genome).toEqual(result.genome);
+      expect(pattern.seedHash).toBe(result.seedHash);
+      expect(["classicBuild", "slowBurn", "doubleDrop"]).toContain(pattern.blueprintId);
     });
   });
 });

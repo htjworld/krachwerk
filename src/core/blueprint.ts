@@ -195,8 +195,8 @@ export type BlueprintId =
   | "halfStep"
   | "switchUp";
 
-/** open = 기본 코드(8자)가 쓰는 기존 5개 블루프린트. 나머지는 얼굴 버튼(스타일 코드)
- *  전용이다(§6.1). */
+/** 장르. open = 테크노(legacy 블루프린트 3종), 나머지는 k/d/p/f 스타일 장르다.
+ *  compute/metropolis 블루프린트는 computeK/metropolisK의 바탕으로만 남아 있다. */
 export type StyleId = "open" | "k" | "d" | "p" | "f";
 
 export interface Blueprint {

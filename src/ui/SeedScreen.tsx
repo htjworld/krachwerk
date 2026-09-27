@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useI18n } from "../i18n/i18n";
-import { randomSeedCandidate } from "../core";
-import { parseSeed } from "../core/seedCode";
+import { isCanonical, parseSeed, randomCode } from "../core/seedCode";
 import { ArtistFaces } from "./ArtistFaces";
 
 interface Props {
@@ -13,16 +12,14 @@ export function SeedScreen({ onGenerate, myKitCount }: Props) {
   const { t } = useI18n();
   const [seedInput, setSeedInput] = useState("");
 
-  const selectedStyle = parseSeed(seedInput).family;
+  // 정규 코드를 다 입력했을 때만 얼굴에 불을 켠다. 자유 텍스트도 해시되면 어떤 장르가 되지만,
+  // 한 글자 칠 때마다 얼굴이 바뀌면 산만하다.
+  const selectedStyle = isCanonical(seedInput) ? parseSeed(seedInput).family : null;
 
   const handleGenerate = () => {
     // 여기서 정규 코드로 바꿔 두면 그 뒤로는(URL, 공유 링크, 화면 표시) 전부 코드로만
-    // 다닌다. generatePattern도 어차피 내부에서 canonicalize하지만, 미리 해 두면 주소창에
-    // 뜨는 값과 pattern.seedInput이 처음부터 같다 (§11 단계 4).
-    // parseSeed를 거쳐야 한다 — canonicalize를 바로 쓰면 스타일 코드(얼굴 버튼)를 정규
-    // 코드가 아니라고 보고 해시해서 완전히 다른 곡으로 만들어버린다(§5.1).
-    // 빈 칸으로 누르면 무작위 시드로 만든다.
-    onGenerate(parseSeed(seedInput.trim() || randomSeedCandidate()).code);
+    // 다닌다. 빈 칸으로 누르면 다섯 장르가 같은 확률로 나오는 무작위 코드를 만든다.
+    onGenerate(parseSeed(seedInput.trim() || randomCode()).code);
   };
 
   return (

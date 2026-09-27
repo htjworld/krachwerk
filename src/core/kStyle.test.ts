@@ -85,7 +85,7 @@ function collectEvents(pattern: Pattern, arrangement: ReturnType<typeof arrangem
 
 describe("k 스타일 코드 (§11.1 k vs 기본 코드 구별)", () => {
   it("codeRead 섹션이 있고 로봇 목소리(calls)가 실제로 울린다", () => {
-    const pattern = generatePattern("k000000000000000");
+    const pattern = generatePattern("k000000000");
     expect(pattern.style).toBe("k");
     expect(["computeK", "metropolisK"]).toContain(pattern.blueprintId);
 

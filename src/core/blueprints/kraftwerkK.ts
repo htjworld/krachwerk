@@ -1,7 +1,7 @@
 // computeK / metropolisK (§6.3 k-1/k-2): k(Kraftwerk) 스타일 코드 전용 블루프린트.
 // v2 compute/metropolis 섹션 배열을 "그대로 복사"한다 — 실제로는 원본을 스프레드해서
 // 옮기고 다음만 더한다:
-//  - 맨 끝(마지막 end/tail 섹션 앞)에 codeRead 섹션 4마디: 로봇 목소리가 16자 코드 전체를
+//  - 맨 끝(마지막 end/tail 섹션 앞)에 codeRead 섹션 4마디: 로봇 목소리가 코드 전체를
 //    한 마디에 4글자씩 8분음표(스텝 0·4·8·12)로 읽는다. 기본 코드 compute는 "calls" 큐가
 //    있어도 한 마디에 최대 한 글자만 읽는다(audioEngine.ts의 "calls" 처리, barIndex당 한
 //    번뿐) — 그래서 이 섹션 하나만으로 k와 기본 코드가 절대 같은 이벤트 목록을 못 낸다

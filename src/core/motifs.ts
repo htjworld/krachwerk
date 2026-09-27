@@ -12,17 +12,9 @@ import type { StepCell } from "./pattern";
 // import를 피하려고) 상수를 다시 불러오는 대신 그냥 16을 쓴다.
 const STEPS = 16;
 
-const LEGACY_IDS: readonly BlueprintId[] = ["classicBuild", "slowBurn", "doubleDrop"];
+/** 테크노 장르(open)의 블루프린트. genome.blueprint(기수 3)가 고른다. */
+export const LEGACY_IDS: readonly BlueprintId[] = ["classicBuild", "slowBurn", "doubleDrop"];
 
-/**
- * §8.1 블루프린트 선택. g1(기수 15)을 0–5 compute / 6–11 metropolis / 12·13·14 legacy 3종으로
- * 나눈다 (Q2: 40/40/20 비중).
- */
-export function blueprintIdFor(g1: number): BlueprintId {
-  if (g1 <= 5) return "compute";
-  if (g1 <= 11) return "metropolis";
-  return LEGACY_IDS[g1 - 12];
-}
 
 // ---------------------------------------------------------------- 드럼 변형 (§16.4 표, legacy 열)
 

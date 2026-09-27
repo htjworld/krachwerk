@@ -11,7 +11,7 @@ import { deriveTrack } from "./track";
 import { resolveLayers } from "./patternOverride";
 import { blueprintFor } from "./blueprints";
 import { HOOK_RHYTHMS, HOOK_SYLLABLES, hookPlan, pChordRootAt, styleBass, styleDrumMaps, styleRiff } from "./styleMotifs";
-import { randomStyleCode } from "./seedCode";
+import { randomCode } from "./seedCode";
 
 function detRand(seed: number): (bytes: Uint8Array) => void {
   const rng = mulberry32(seed);
@@ -80,7 +80,7 @@ function collectEvents(pattern: Pattern) {
   return { events, arrangement };
 }
 
-const SAMPLE_CODES = Array.from({ length: 40 }, (_, i) => randomStyleCode("p", detRand(i + 1)));
+const SAMPLE_CODES = Array.from({ length: 40 }, (_, i) => randomCode("p", detRand(i + 1)));
 
 describe("p 스타일 코드 (§11 단계 9)", () => {
   it("블루프린트 2종이 표본 안에서 전부 나온다", () => {

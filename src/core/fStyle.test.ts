@@ -11,7 +11,7 @@ import { deriveTrack } from "./track";
 import { resolveLayers } from "./patternOverride";
 import { blueprintFor } from "./blueprints";
 import { chopPlan, fChordRootAt, styleBass, styleDrumMaps } from "./styleMotifs";
-import { randomStyleCode } from "./seedCode";
+import { randomCode } from "./seedCode";
 
 function detRand(seed: number): (bytes: Uint8Array) => void {
   const rng = mulberry32(seed);
@@ -85,7 +85,7 @@ function collectEvents(pattern: Pattern, opts: { chopPool?: AudioBuffer[] } = {}
   return { events, arrangement, sub808 };
 }
 
-const SAMPLE_CODES = Array.from({ length: 40 }, (_, i) => randomStyleCode("f", detRand(i + 1)));
+const SAMPLE_CODES = Array.from({ length: 40 }, (_, i) => randomCode("f", detRand(i + 1)));
 
 describe("f 스타일 코드 (§11 단계 10)", () => {
   it("블루프린트 3종이 표본 안에서 전부 나온다", () => {

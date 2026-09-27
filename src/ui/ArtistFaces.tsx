@@ -1,4 +1,4 @@
-import { randomStyleCode, type StyleLetter } from "../core/seedCode";
+import { randomCode, type StyleLetter } from "../core/seedCode";
 import { useI18n } from "../i18n/i18n";
 
 interface Props {
@@ -33,7 +33,7 @@ export function ArtistFaces({ selected, onPick }: Props) {
             aria-pressed={selected === style}
             aria-label={t(`artistFaces.aria.${style}`)}
             disabled={!enabled}
-            onClick={() => onPick(randomStyleCode(style))}
+            onClick={() => onPick(randomCode(style))}
           >
             <img className="artist-face-img" src={faceUrl(style)} alt="" />
             <span className="artist-face-label">{t(`artistFaces.label.${style}`)}</span>
