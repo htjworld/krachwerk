@@ -8,6 +8,7 @@ import {
   scheduleBar,
   secondsPerStep,
   tapeJitterMs,
+  tapeLowpassHz,
   type DrumRole,
   type Rig,
 } from "./audioEngine";
@@ -347,5 +348,19 @@ describe("마디 흔들림 barJitterSeconds (§6.5 item 3)", () => {
         expect(Math.abs(barJitterSeconds(pattern, bar))).toBeLessThanOrEqual(j + 1e-9);
       }
     }
+  });
+});
+
+describe("tape 게놈 분해 (§7.3, §6.5 item 2 — 흔들림 4단계 × 로파이 로우패스 4단계 = 16)", () => {
+  it("tape 0~15가 (지터, 로우패스) 조합 16개를 정확히 한 번씩 덮는다", () => {
+    const seen = new Set<string>();
+    for (let tape = 0; tape < 16; tape++) {
+      const j = tapeJitterMs(tape);
+      const lp = tapeLowpassHz(tape);
+      expect([4, 8, 14, 20]).toContain(j);
+      expect([1500, 3000, 5000, 7500]).toContain(lp);
+      seen.add(`${j}:${lp}`);
+    }
+    expect(seen.size).toBe(16);
   });
 });

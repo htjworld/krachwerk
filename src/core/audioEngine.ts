@@ -233,7 +233,8 @@ function buildMix(
   ctx: BaseAudioContext,
   tempo: number,
   liveCutoffHz: number,
-  chunkTap?: { totalSamples: number; onChunk: (buffer: AudioBuffer, readySamples: number) => void }
+  chunkTap?: { totalSamples: number; onChunk: (buffer: AudioBuffer, readySamples: number) => void },
+  lofi?: { lowpassHz: number }
 ): Mix {
   const limiter = ctx.createDynamicsCompressor();
   limiter.threshold.value = -3;
@@ -262,7 +263,44 @@ function buildMix(
   const rumbleCut = ctx.createBiquadFilter();
   rumbleCut.type = "highpass";
   rumbleCut.frequency.value = 26;
-  rumbleCut.connect(tone);
+
+  if (lofi) {
+    // §6.5 item 2(Delroy 로파이 체인): 모노 합산(0.85 비율) → 로우패스(게놈 tape) → 저중역
+    // 피킹 +3dB@180Hz → 테이프 새추레이션. tone 앞에 끼운다.
+    const splitter = ctx.createChannelSplitter(2);
+    rumbleCut.connect(splitter);
+    const monoAvg = ctx.createGain();
+    monoAvg.gain.value = 0.5 * 0.85;
+    splitter.connect(monoAvg, 0);
+    splitter.connect(monoAvg, 1);
+    const merger = ctx.createChannelMerger(2);
+    monoAvg.connect(merger, 0, 0);
+    monoAvg.connect(merger, 0, 1);
+    const dry = ctx.createGain();
+    dry.gain.value = 0.15;
+    rumbleCut.connect(dry);
+
+    const lofiLowpass = ctx.createBiquadFilter();
+    lofiLowpass.type = "lowpass";
+    lofiLowpass.frequency.value = lofi.lowpassHz;
+    lofiLowpass.Q.value = 0.7;
+    merger.connect(lofiLowpass); // 두 입력(모노 성분 + 드라이)이 자동으로 합쳐진다
+    dry.connect(lofiLowpass);
+
+    const peaking = ctx.createBiquadFilter();
+    peaking.type = "peaking";
+    peaking.frequency.value = 180;
+    peaking.gain.value = 3;
+    lofiLowpass.connect(peaking);
+
+    const tapeSaturator = ctx.createWaveShaper();
+    tapeSaturator.curve = makeSaturationCurve(2.4);
+    peaking.connect(tapeSaturator);
+
+    tapeSaturator.connect(tone);
+  } else {
+    rumbleCut.connect(tone);
+  }
 
   const master = ctx.createGain();
   master.gain.value = 0.8;
@@ -537,23 +575,49 @@ const SYNTH_STRIPS: Record<SynthLayer, StripSpec> = {
   drone: { level: 0.25, pan: 0, reverb: 0.35, delay: 0 },
 };
 
-function buildStrip(ctx: BaseAudioContext, mix: Mix, spec: StripSpec, destBus?: GainNode): GainNode {
+// §6.5 item 4(신스 폭). 좌 0ms/우 12ms의 짧은 스테레오 딜레이 하나로 폭을 넓힌다 — 하스
+// 효과. width는 이 딜레이 신호를 얼마나 섞을지(0=원래 그대로, 1=완전히 벌어진 소리).
+function widenStereo(ctx: BaseAudioContext, input: AudioNode, width: number): AudioNode {
+  const splitter = ctx.createChannelSplitter(2);
+  input.connect(splitter);
+  const delayR = ctx.createDelay(0.02);
+  delayR.delayTime.value = 0.012;
+  splitter.connect(delayR, 1);
+  const merger = ctx.createChannelMerger(2);
+  splitter.connect(merger, 0, 0);
+  delayR.connect(merger, 0, 1);
+
+  const wet = ctx.createGain();
+  wet.gain.value = width;
+  merger.connect(wet);
+  const dry = ctx.createGain();
+  dry.gain.value = 1 - width;
+  input.connect(dry);
+
+  const out = ctx.createGain();
+  wet.connect(out);
+  dry.connect(out);
+  return out;
+}
+
+function buildStrip(ctx: BaseAudioContext, mix: Mix, spec: StripSpec, destBus?: GainNode, width?: number): GainNode {
   const input = ctx.createGain();
   input.gain.value = spec.level;
   const panner = ctx.createStereoPanner();
   panner.pan.value = spec.pan;
   input.connect(panner);
-  panner.connect(destBus ?? mix.music);
+  const tail = width !== undefined && width > 0 ? widenStereo(ctx, panner, width) : panner;
+  tail.connect(destBus ?? mix.music);
   if (spec.reverb > 0) {
     const send = ctx.createGain();
     send.gain.value = spec.reverb;
-    panner.connect(send);
+    tail.connect(send);
     send.connect(mix.reverbSend);
   }
   if (spec.delay > 0) {
     const send = ctx.createGain();
     send.gain.value = spec.delay;
-    panner.connect(send);
+    tail.connect(send);
     send.connect(mix.delaySend);
   }
   return input;
@@ -571,6 +635,11 @@ interface RatioTarget {
    * 짧은 선형 램프로만 움직인다.
    */
   smooth?: boolean;
+  /**
+   * 260927 §7.1 신규. decayRatio까지 내려가는 시간을 noteDuration×0.8 대신 고정 ms로 쓴다
+   * (fmEPiano의 해머 벨처럼 노트 길이와 무관하게 항상 짧게 끝나야 하는 엔벨로프).
+   */
+  decayMs?: number;
 }
 
 export interface MonoVoice {
@@ -582,13 +651,28 @@ export interface MonoVoice {
  * 모노라서 한 레이어 안에서는 노트가 겹치지 않는다는 뜻인데, 시퀀서 기반 일렉트로닉에서는
  * 오히려 그게 제대로 된 동작이다.
  */
+// §7.1 전역 행(테이프 워블, d 전용): 0.45Hz 오실레이터 → 게인(±8센트). 반환 노드를 원하는
+// 만큼 여러 오실레이터의 detune에 fan-out으로 연결하면 된다 — 곡당 노드 2개로 끝난다.
+function createTapeWobble(ctx: BaseAudioContext, duration: number): AudioNode {
+  const lfo = ctx.createOscillator();
+  lfo.type = "sine";
+  lfo.frequency.value = 0.45;
+  const depth = ctx.createGain();
+  depth.gain.value = 8;
+  lfo.connect(depth);
+  lfo.start(0);
+  lfo.stop(duration);
+  return depth;
+}
+
 function createVoice(
   ctx: BaseAudioContext,
   destination: AudioNode,
   voiceId: VoiceId,
   noiseBuffer: AudioBuffer,
   duration: number,
-  filterEnv: number
+  filterEnv: number,
+  detuneMod?: AudioNode
 ): MonoVoice {
   const amp = ctx.createGain();
   amp.gain.value = 0;
@@ -621,6 +705,12 @@ function createVoice(
 
   let attack = 0.005;
   let peak = 0.2;
+  // 260927 §7.1: 0이면 예전처럼 noteDuration에 비례해서 꺼진다(기존 6종, 불변). >0이면 그
+  // 릴리스 시간을 최소로 보장한다 — 새 보이스는 노트 길이와 무관하게 자기 릴리스로 운다.
+  let release = 0;
+  // organBass 전용 키 클릭(§7.1). 노트마다 짧게 열었다 닫는 별도 게인 — persistent 노이즈
+  // 소스 하나를 계속 돌리고 게인만 펄스 쳐서 R8(노트마다 노드 생성 금지)을 지킨다.
+  let click: GainNode | null = null;
 
   switch (voiceId) {
     case "square":
@@ -687,6 +777,143 @@ function createVoice(
       peak = 0.22;
       break;
     }
+    // 260927 §7.1 신규 5종. 전부 모노 보이스 1개 + 오토메이션 원칙 그대로다.
+    case "organBass": {
+      // 드로바 8·8·8 근사: f + 2f(0.5) + 3f(0.25).
+      osc("sine", 1, 0, amp);
+      const g2 = ctx.createGain();
+      g2.gain.value = 0.5;
+      g2.connect(amp);
+      osc("sine", 2, 0, g2);
+      const g3 = ctx.createGain();
+      g3.gain.value = 0.25;
+      g3.connect(amp);
+      osc("sine", 3, 0, g3);
+
+      // 키 클릭: 노이즈 3ms, −18dB(≈0.126).
+      const clickNoise = ctx.createBufferSource();
+      clickNoise.buffer = noiseBuffer;
+      clickNoise.loop = true;
+      click = ctx.createGain();
+      click.gain.value = 0;
+      clickNoise.connect(click);
+      click.connect(amp);
+      clickNoise.start(0);
+      clickNoise.stop(duration);
+
+      attack = 0.004;
+      release = 0.06;
+      peak = 0.22;
+      break;
+    }
+    case "formantVox": {
+      // ponytail: 모음은 항상 "a"로 고정한다. 실제 찬트 음절(§7.7 hookPlan/chopPlan)이
+      // 어느 슬롯에 어느 모음을 줄지는 그 계획을 짜는 단계(§11 단계 9)에서 정해진다 —
+      // note()의 (time,freq,duration,level) 네 인자만으로는 모음을 못 골라서, 지금은
+      // 이 보이스가 "포먼트 신스"라는 것만 만들어 둔다. 그때 가서 모음별 보이스를 여러
+      // 개 두거나 note()에 인자를 늘리거나 고르면 된다.
+      const source = ctx.createGain();
+      const sawOsc = osc("sawtooth", 1, 0, source);
+      const pulseGain = ctx.createGain();
+      pulseGain.gain.value = 0.4;
+      pulseGain.connect(source);
+      const pulseOsc = osc("square", 1, 0, pulseGain);
+
+      // 모음 "a": F1 800 / F2 1150 / F3 2900, Q 8/10/12.
+      for (const [freq, q] of [
+        [800, 8],
+        [1150, 10],
+        [2900, 12],
+      ] as const) {
+        const formant = ctx.createBiquadFilter();
+        formant.type = "bandpass";
+        formant.frequency.value = freq;
+        formant.Q.value = q;
+        source.connect(formant);
+        formant.connect(amp);
+      }
+
+      // 비브라토 5.2Hz ±15센트(detune). ponytail: "노트 시작 150ms 뒤부터"는 노트마다
+      // 게이트를 새로 걸어야 해서(R8 위반 없이 하려면 게인 오토메이션 하나가 더 필요하다)
+      // 생략하고 항상 걸어 둔다 — 길게 우는 찬트음이라 초반 10분의 1초 차이는 티가 잘 안 난다.
+      const vibrato = ctx.createOscillator();
+      vibrato.type = "sine";
+      vibrato.frequency.value = 5.2;
+      const vibratoDepth = ctx.createGain();
+      vibratoDepth.gain.value = 15;
+      vibrato.connect(vibratoDepth);
+      vibrato.start(0);
+      vibrato.stop(duration);
+      vibratoDepth.connect(sawOsc.detune);
+      vibratoDepth.connect(pulseOsc.detune);
+
+      attack = 0.012;
+      release = 0.09;
+      peak = 0.24;
+      break;
+    }
+    case "fmEPiano": {
+      const carrier = ctx.createOscillator();
+      carrier.type = "sine";
+      carrier.frequency.value = 220;
+      carrier.connect(amp);
+      carrier.start(0);
+      carrier.stop(duration);
+      targets.push({ param: carrier.frequency, ratio: 1 });
+
+      // 본체: 모듈레이터 비율 1:1, 인덱스 2.2 → 0.3, 400ms.
+      const modGain = ctx.createGain();
+      modGain.gain.value = 1;
+      modGain.connect(carrier.frequency);
+      targets.push({ param: modGain.gain, ratio: 2.2, decayRatio: 0.3, decayMs: 400 });
+      osc("sine", 1, 0, modGain);
+
+      // 해머 벨: 모듈레이터 비율 14, 인덱스 0.4, 30ms.
+      const hammerGain = ctx.createGain();
+      hammerGain.gain.value = 1;
+      hammerGain.connect(carrier.frequency);
+      targets.push({ param: hammerGain.gain, ratio: 0.4, decayRatio: 0.02, decayMs: 30 });
+      osc("sine", 14, 0, hammerGain);
+
+      attack = 0.002;
+      release = 1.2;
+      peak = 0.22;
+      break;
+    }
+    case "superPad": {
+      // 톱니 3개, ±0/±9/±15센트.
+      osc("sawtooth", 1, 0, amp);
+      osc("sawtooth", 1, 9, amp);
+      osc("sawtooth", 1, -15, amp);
+      attack = 0.35;
+      release = 1.2;
+      peak = 0.16;
+      break;
+    }
+    case "cheapSynth": {
+      const sq = osc("square", 1, 0, amp);
+      const sawGain = ctx.createGain();
+      sawGain.gain.value = 0.5;
+      sawGain.connect(amp);
+      const saw = osc("sawtooth", 1, 6, sawGain);
+      // 로파이의 테이프 워블(§7.1 전역 행): 게놈 tape가 있는 스타일(d)만 buildRig가 넘겨준다.
+      detuneMod?.connect(sq.detune);
+      detuneMod?.connect(saw.detune);
+
+      // 로우패스 고정 2.2kHz. filterEnv 기반 스윕 필터(위 공용 블록)와는 별개로 항상 켜져
+      // 있어야 해서, amp 뒤에 직접 끼워 넣는다.
+      amp.disconnect(target);
+      const fixedLowpass = ctx.createBiquadFilter();
+      fixedLowpass.type = "lowpass";
+      fixedLowpass.frequency.value = 2200;
+      amp.connect(fixedLowpass);
+      fixedLowpass.connect(target);
+
+      attack = 0.003;
+      release = 0.04;
+      peak = 0.2;
+      break;
+    }
   }
 
   return {
@@ -697,7 +924,7 @@ function createVoice(
         else t.param.setValueAtTime(value, time);
         if (t.decayRatio !== undefined) {
           const decayTo = Math.max(1, freq * t.decayRatio);
-          const decayAt = time + noteDuration * 0.8;
+          const decayAt = time + (t.decayMs !== undefined ? t.decayMs / 1000 : noteDuration * 0.8);
           if (t.smooth) t.param.linearRampToValueAtTime(decayTo, decayAt);
           else t.param.exponentialRampToValueAtTime(decayTo, decayAt);
         }
@@ -709,9 +936,16 @@ function createVoice(
         filter.frequency.linearRampToValueAtTime(top, time + 0.006);
         filter.frequency.linearRampToValueAtTime(bottom, time + noteDuration * 0.7);
       }
+      if (click) {
+        // 260927 §7.1 organBass 키 클릭: 3ms, −18dB(≈0.126).
+        click.gain.setValueAtTime(0.126, time);
+        click.gain.setValueAtTime(0.126, time + 0.003);
+        click.gain.linearRampToValueAtTime(0, time + 0.006);
+      }
+      const tail = Math.max(noteDuration, release);
       amp.gain.setValueAtTime(0.0001, time);
       amp.gain.linearRampToValueAtTime(peak * level, time + attack);
-      amp.gain.exponentialRampToValueAtTime(0.0001, time + attack + noteDuration);
+      amp.gain.exponentialRampToValueAtTime(0.0001, time + attack + tail);
     },
   };
 }
@@ -1204,10 +1438,14 @@ const LAYER_TO_DRUM_ROLE: Partial<Record<LayerId, DrumRole>> = {
 const JITTER_SALT = 0x6a697474; // "jitt"
 const BAR_GATE_SALT = 0x62617267; // "barg"
 
-// tape 게놈(d 전용, §7.3) 하위 두 비트 = 마디 흔들림 4단계. 상위 두 비트(로우패스 4단계)는
-// 로파이 체인(단계 7)이 읽는다 — 여기선 안 쓴다.
+// tape 게놈(d 전용, §7.3) 하위 두 비트 = 마디 흔들림 4단계, 상위 두 비트 = 로파이 로우패스
+// 4단계(§6.5 item 2). 16 = 4×4.
 export function tapeJitterMs(tape: number): number {
   return [4, 8, 14, 20][tape % 4];
+}
+
+export function tapeLowpassHz(tape: number): number {
+  return [1500, 3000, 5000, 7500][Math.floor(tape / 4) % 4];
 }
 
 /**
@@ -1422,7 +1660,8 @@ async function buildRig(
     ctx,
     tempo,
     cutoffToFrequency(liveControls?.filterCutoff ?? 1),
-    onChunk ? { totalSamples, onChunk } : undefined
+    onChunk ? { totalSamples, onChunk } : undefined,
+    blueprint.lofi ? { lowpassHz: tapeLowpassHz(pattern.styleGenome?.tape ?? 0) } : undefined
   );
   const noise = makeNoiseBuffer(ctx, pattern.seedHash, 1);
 
@@ -1431,12 +1670,24 @@ async function buildRig(
   const bassSidechain = blueprint.sidechain ? ctx.createGain() : null;
   if (bassSidechain) bassSidechain.connect(mix.master);
 
+  // §6.5 item 4(신스 폭). v2 블루프린트는 synthWidth가 없어서 지금처럼 폭 없이 그대로다.
   const strips = Object.fromEntries(
     (Object.keys(SYNTH_STRIPS) as SynthLayer[]).map((id) => [
       id,
-      buildStrip(ctx, mix, SYNTH_STRIPS[id], id === "bass" ? (bassSidechain ?? undefined) : undefined),
+      buildStrip(
+        ctx,
+        mix,
+        SYNTH_STRIPS[id],
+        id === "bass" ? (bassSidechain ?? undefined) : undefined,
+        (id === "pad" || id === "stab") && blueprint.synthWidth !== undefined ? blueprint.synthWidth : undefined
+      ),
     ])
   ) as Record<SynthLayer, GainNode>;
+
+  // §7.1 전역 행(테이프 워블). d(tape 게놈 있음)만 만든다. 모든 voices/stabVoices 생성에
+  // 넘기지만 실제로 반응하는 건 cheapSynth 케이스뿐이다(다른 보이스는 detuneMod를 안 읽는다)
+  // — d의 bassVoice/leadVoice는 이미 cheapSynth로 고정돼 있다(§13.5).
+  const tapeWobble = pattern.styleGenome?.tape !== undefined ? createTapeWobble(ctx, duration) : undefined;
 
   const family = blueprintFamily(pattern.blueprintId);
   const motifScale =
@@ -1504,13 +1755,13 @@ async function buildRig(
     mix,
     drums: createDrumMixer(ctx, mix, totalSamples, panScale),
     voices: {
-      bass: createVoice(ctx, strips.bass, pattern.bassVoice, noise, duration, 0.6),
-      lead: createVoice(ctx, strips.lead, pattern.leadVoice, noise, duration, 0.25),
-      arp: createVoice(ctx, strips.arp, "square", noise, duration, 0.45),
-      seqRiff: createVoice(ctx, strips.seqRiff, "triSub", noise, duration, 0.4),
-      seqRun: createVoice(ctx, strips.seqRun, "sawUnison", noise, duration, 0.35),
+      bass: createVoice(ctx, strips.bass, pattern.bassVoice, noise, duration, 0.6, tapeWobble),
+      lead: createVoice(ctx, strips.lead, pattern.leadVoice, noise, duration, 0.25, tapeWobble),
+      arp: createVoice(ctx, strips.arp, "square", noise, duration, 0.45, tapeWobble),
+      seqRiff: createVoice(ctx, strips.seqRiff, "triSub", noise, duration, 0.4, tapeWobble),
+      seqRun: createVoice(ctx, strips.seqRun, "sawUnison", noise, duration, 0.35, tapeWobble),
     },
-    stabVoices: [0, 1, 2].map(() => createVoice(ctx, strips.stab, "sawUnison", noise, duration, 0.4)),
+    stabVoices: [0, 1, 2].map(() => createVoice(ctx, strips.stab, "sawUnison", noise, duration, 0.4, tapeWobble)),
     strips,
     bank,
     pattern,
