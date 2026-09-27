@@ -36,7 +36,6 @@ export function ArtistFaces({ selected, onPick }: Props) {
             onClick={() => onPick(randomCode(style))}
           >
             <img className="artist-face-img" src={faceUrl(style)} alt="" />
-            <span className="artist-face-label">{t(`artistFaces.label.${style}`)}</span>
           </button>
         );
       })}
