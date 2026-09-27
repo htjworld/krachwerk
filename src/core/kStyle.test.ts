@@ -66,6 +66,7 @@ function buildFakeRig(pattern: Pattern) {
     hookPlan: null,
     chopPlan: null,
     chopPool: [],
+    chordRootAt: null,
   };
   return { rig, events: log.events };
 }

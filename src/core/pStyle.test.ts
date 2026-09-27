@@ -10,7 +10,7 @@ import { mulberry32 } from "./prng";
 import { deriveTrack } from "./track";
 import { resolveLayers } from "./patternOverride";
 import { blueprintFor } from "./blueprints";
-import { HOOK_RHYTHMS, HOOK_SYLLABLES, hookPlan, styleBass, styleDrumMaps, styleRiff } from "./styleMotifs";
+import { HOOK_RHYTHMS, HOOK_SYLLABLES, hookPlan, pChordRootAt, styleBass, styleDrumMaps, styleRiff } from "./styleMotifs";
 import { randomStyleCode } from "./seedCode";
 
 function detRand(seed: number): (bytes: Uint8Array) => void {
@@ -62,6 +62,7 @@ function buildFakeRig(pattern: Pattern) {
     hookPlan: hookPlan(g),
     chopPlan: null,
     chopPool: [],
+    chordRootAt: (barIndex: number) => pChordRootAt(g, barIndex),
   };
   return { rig, events: log.events };
 }
@@ -113,6 +114,22 @@ describe("p 스타일 코드 (§11 단계 9)", () => {
     const pattern = generatePattern(clubHouseCode!);
     const { events } = collectEvents(pattern);
     expect(events.some((e) => e.layer === "arp")).toBe(true);
+  });
+
+  it("chord가 있는 섹션에서 stabVoices(superPad/fmEPiano)가 실제로 코드 3음을 낸다", () => {
+    // clubHouse break/halfBeat, slowJam intro/chorus 등 — 두 블루프린트 다 chord 큐가 있다.
+    for (const blueprintId of ["clubHouse", "slowJam"] as const) {
+      const code = SAMPLE_CODES.find((c) => generatePattern(c).blueprintId === blueprintId);
+      expect(code).toBeDefined();
+      const pattern = generatePattern(code!);
+      const { events } = collectEvents(pattern);
+      const stabEvents = events.filter((e) => e.layer === "stab");
+      expect(stabEvents.length).toBeGreaterThan(0);
+      // 코드 3음(근음·3도·5도)이 한 번에 같이 울려야 화음으로 들린다 — 같은 시각에 3개.
+      const byTime = new Map<number, number>();
+      for (const e of stabEvents) byTime.set(e.time, (byTime.get(e.time) ?? 0) + 1);
+      expect([...byTime.values()].some((count) => count === 3)).toBe(true);
+    }
   });
 
   it("끝은 stop(§6.3 p 표): 마지막 섹션이 endFill stop이다", () => {

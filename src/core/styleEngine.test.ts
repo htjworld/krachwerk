@@ -119,6 +119,7 @@ function buildRig(
     hookPlan: null,
     chopPlan: null,
     chopPool: [],
+    chordRootAt: null,
   };
   return { rig, log };
 }

@@ -10,7 +10,7 @@ import { mulberry32 } from "./prng";
 import { deriveTrack } from "./track";
 import { resolveLayers } from "./patternOverride";
 import { blueprintFor } from "./blueprints";
-import { chopPlan, styleBass, styleDrumMaps } from "./styleMotifs";
+import { chopPlan, fChordRootAt, styleBass, styleDrumMaps } from "./styleMotifs";
 import { randomStyleCode } from "./seedCode";
 
 function detRand(seed: number): (bytes: Uint8Array) => void {
@@ -20,7 +20,7 @@ function detRand(seed: number): (bytes: Uint8Array) => void {
   };
 }
 
-function buildFakeRig(pattern: Pattern) {
+function buildFakeRig(pattern: Pattern, opts: { chopPool?: AudioBuffer[] } = {}) {
   const track = deriveTrack(pattern);
   const layers = resolveLayers(pattern, null);
   const log = createEventLog();
@@ -66,14 +66,15 @@ function buildFakeRig(pattern: Pattern) {
     bassSidechain: null,
     hookPlan: null,
     chopPlan: chopPlan(g),
-    chopPool: [chopBuffer1, chopBuffer2],
+    chopPool: opts.chopPool ?? [chopBuffer1, chopBuffer2],
+    chordRootAt: (barIndex: number) => fChordRootAt(g, barIndex),
   };
   return { rig, events: log.events, sub808 };
 }
 
-function collectEvents(pattern: Pattern) {
+function collectEvents(pattern: Pattern, opts: { chopPool?: AudioBuffer[] } = {}) {
   const arrangement = arrangementFor(pattern, pattern.tempo * pattern.tempoScale);
-  const { rig, events, sub808 } = buildFakeRig(pattern);
+  const { rig, events, sub808 } = buildFakeRig(pattern, opts);
   for (const section of arrangement.sections) {
     for (let sectionBar = 0; sectionBar < section.bars; sectionBar++) {
       const barIndex = section.startBar + sectionBar;
@@ -108,6 +109,28 @@ describe("f 스타일 코드 (§11 단계 10)", () => {
     expect(target).toBeLessThanOrEqual(210);
     expect(arrangement.totalSeconds).toBeGreaterThan(140);
     expect(arrangement.totalSeconds).toBeLessThan(220);
+  });
+
+  it("chop 소스 풀이 비어 있으면(내 소리 없음) 로봇 목소리 대신 arp(formantVox) 합성으로 대신한다", () => {
+    // §11 사용자 청취 피드백: 로봇 목소리(voiceBank)를 chop 폴백으로 쓰면 k 색이 묻어난다 —
+    // 그래서 chopPool이 비어 있을 땐 hitSlice/chop 이벤트가 아니라 arp 합성 노트가 나야 한다.
+    const code = SAMPLE_CODES[0];
+    const pattern = generatePattern(code);
+    const { events } = collectEvents(pattern, { chopPool: [] });
+    expect(events.some((e) => e.layer === "chop")).toBe(false);
+    expect(events.some((e) => e.layer === "arp")).toBe(true);
+  });
+
+  it("chord가 있는 섹션에서 stabVoices(superPad)가 실제로 코드 3음을 낸다", () => {
+    const code = SAMPLE_CODES.find((c) => generatePattern(c).blueprintId === "garageShuffle");
+    expect(code).toBeDefined();
+    const pattern = generatePattern(code!);
+    const { events } = collectEvents(pattern);
+    const stabEvents = events.filter((e) => e.layer === "stab");
+    expect(stabEvents.length).toBeGreaterThan(0);
+    const byTime = new Map<number, number>();
+    for (const e of stabEvents) byTime.set(e.time, (byTime.get(e.time) ?? 0) + 1);
+    expect([...byTime.values()].some((count) => count === 3)).toBe(true);
   });
 
   it("switchUp: kitSwap 섹션에서는 sub808 버퍼로, 아닌 섹션에서는 원래 킷으로 킥이 난다", () => {

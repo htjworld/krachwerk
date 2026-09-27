@@ -24,7 +24,18 @@ import {
 import { blueprintFor } from "./blueprints";
 import { legacyCue } from "./blueprints/legacy";
 import { targetSecondsFor, targetSecondsForStyle } from "./genome";
-import { chopPlan, hookPlan, styleBass, styleDrumMaps, styleRiff, type ChopNote, type DrumMap, type HookNote } from "./styleMotifs";
+import {
+  chopPlan,
+  fChordRootAt,
+  hookPlan,
+  pChordRootAt,
+  styleBass,
+  styleDrumMaps,
+  styleRiff,
+  type ChopNote,
+  type DrumMap,
+  type HookNote,
+} from "./styleMotifs";
 import { loadStyleKit, loadSub808 } from "./drumSynth";
 import {
   computeBass,
@@ -1175,9 +1186,13 @@ export interface Rig {
   hookPlan: readonly HookNote[] | null;
   /** 260927 §6.4.1/§7.7 신규. f `chop` 목소리 조각 계획(2마디 고정 패턴). f가 아니면 null. */
   chopPlan: readonly ChopNote[] | null;
-  /** 260927 §6.4.1 신규. chop이 실제로 자를 소스 풀 — 내 소리 voice 슬롯 1개 또는 로봇
-   *  목소리 글자 버퍼들. 비어 있으면(둘 다 없으면) chop은 조용히 아무 소리도 안 낸다. */
+  /** 260927 §6.4.1 신규. chop이 실제로 자를 소스 풀 — 내 소리 voice 슬롯 1개뿐이다(CC0
+   *  말소리 풀은 §8.2 소싱 전). 비어 있으면 formantVox 합성으로 대신한다(로봇 목소리는
+   *  일부러 안 쓴다 — k 색이 묻어난다, §11 사용자 청취 피드백). */
   chopPool: readonly AudioBuffer[];
+  /** 260927 §7.1/§7.4 신규. p·f `chord` 레이어가 이 마디에 잡을 코드 뿌리(스케일 디그리).
+   *  p/f가 아니면 null. */
+  chordRootAt: ((barIndex: number) => number) | null;
 }
 
 export function scheduleBar(
@@ -1632,9 +1647,10 @@ function scheduleStyleBar(
   }
 
   // f 목소리 조각(chop, §6.4.1/§7.7): 2마디 고정 패턴(rig.chopPlan)을 barIndex%2로 고른다.
-  // hitSlice로 잘라 친다. 소스 풀이 비어 있으면(내 소리도 없고 로봇 목소리도 못 만들면)
-  // 조용히 아무것도 안 낸다.
-  if (rig.chopPlan && rig.chopPool.length > 0) {
+  // 내 소리가 있으면 그 버퍼를 hitSlice로 잘라 친다. 없으면(§8.2 CC0 말소리 풀은 아직
+  // 소싱 전) formantVox 합성으로 대신한다 — 로봇 목소리(voiceBank)는 일부러 안 쓴다,
+  // k의 "글자를 읽는" 질감이 그대로 묻어나서 f에 크라프트베르크 색이 섞여 버린다.
+  if (rig.chopPlan) {
     const chopCue = cueFor(section, "chop", sectionBar);
     if (
       chopCue &&
@@ -1647,13 +1663,35 @@ function scheduleStyleBar(
         if (Math.floor(note.at / 16) !== barParity) continue;
         const step = note.at % 16;
         if (!cueActiveAtStep(section, "chop", sectionBar, step)) continue;
-        const buffer = pool[note.sliceIndex % pool.length];
-        // 조각 풀이 하나뿐이면(내 소리 업로드 1개) 그 버퍼를 4등분해서 구간을 바꾼다.
-        // 여러 개면(로봇 목소리 글자별) 통째로 다른 버퍼를 고른다.
-        const segment = buffer.duration / 4;
-        const offset = pool.length === 1 ? (note.sliceIndex % 4) * segment : 0;
-        const dur = pool.length === 1 ? segment : buffer.duration;
-        drums.hitSlice("chop", buffer, offset, dur, atSynth(step), 0.7, note.rate);
+        const time = atSynth(step);
+        if (pool.length > 0) {
+          const buffer = pool[note.sliceIndex % pool.length];
+          // 조각 풀이 하나뿐이면(내 소리 업로드 1개) 그 버퍼를 4등분해서 구간을 바꾼다.
+          const segment = buffer.duration / 4;
+          const offset = pool.length === 1 ? (note.sliceIndex % 4) * segment : 0;
+          const dur = pool.length === 1 ? segment : buffer.duration;
+          drums.hitSlice("chop", buffer, offset, dur, time, 0.7, note.rate);
+        } else {
+          const freq = midiToFrequency(degreeToMidi(pattern.scale, note.degree));
+          rig.voices.arp.note(time, freq, rig.stepDur * 3, 0.45);
+        }
+      }
+    }
+  }
+
+  // p·f `chord`(§7.1 fmEPiano/superPad): stabVoices 3개로 코드 3음(근음·3도·5도)을 맡는다.
+  // 코드가 바뀌는 마디(또는 섹션에 새로 들어오는 마디)에서만 다시 친다 — 매 마디 다시
+  // 치면 지속되는 코드가 아니라 스타카토처럼 들린다.
+  if (rig.chordRootAt) {
+    const chordCue = cueFor(section, "chord", sectionBar);
+    if (chordCue && !chordCue.skipBars?.includes(sectionBar)) {
+      const root = rig.chordRootAt(barIndex);
+      const changed = sectionBar === 0 || root !== rig.chordRootAt(barIndex - 1);
+      if (changed) {
+        [root, root + 2, root + 4].forEach((degree, i) => {
+          const freq = midiToFrequency(degreeToMidi(pattern.scale, degree));
+          rig.stabVoices[i].note(atSynth(0), freq, rig.stepDur * 8, 0.4);
+        });
       }
     }
   }
@@ -1853,12 +1891,12 @@ async function buildRig(
   // 목소리)는 voiceBank·userKitBuffers가 정해진 뒤 chopPool로 고른다.
   const chopPlanResult = pattern.style === "f" ? chopPlan(pattern.styleGenome!) : null;
   // "calls" 큐: 기본 compute + k 스타일(codeRead 섹션, metropolisK는 pulseIntro/breakdown도)만
-  // 쓴다(§16.4, kraftwerkK.ts). f는 chop의 로봇 목소리 폴백(§6.4.1 3번)으로 같은 글자별 버퍼를
-  // 재사용한다. 언어는 게놈 밖 — 곡 정체성과 무관하다.
+  // 쓴다(§16.4, kraftwerkK.ts). f의 chop은 일부러 이 로봇 목소리를 안 쓴다(§11 청취 피드백 —
+  // "글자를 읽는" k 질감이 그대로 묻어나 스타일이 섞인다). 언어는 게놈 밖 — 곡 정체성과 무관.
   const voiceLang: VoiceLang = pattern.seedHash % 2 === 0 ? "de" : "en";
   const usesCalls =
     pattern.blueprintId === "compute" || pattern.blueprintId === "computeK" || pattern.blueprintId === "metropolisK";
-  const voiceBank = usesCalls || pattern.style === "f" ? await loadVoiceForCode(ctx, voiceLang, pattern.seedInput) : null;
+  const voiceBank = usesCalls ? await loadVoiceForCode(ctx, voiceLang, pattern.seedInput) : null;
 
   // 시그니처 사운드(§15.2): sigSlots가 있는 compute/metropolis 계열만, 곡 하나당 S2~S6 중 하나.
   // (S1 로봇 목소리는 이미 위 voiceBank/"calls" 큐가 맡는다.)
@@ -1909,13 +1947,17 @@ async function buildRig(
     pattern.blueprintId === "switchUp" ? { kick: await loadSub808(ctx.sampleRate) } : null;
 
   const userKitBuffersResolved = await resolveUserKitBuffers(ctx, userKit, pattern.seedHash);
-  // f 목소리 조각(§6.4.1 소스 우선순위): 내 소리 voice 슬롯 > 로봇 목소리 풀(voiceBank의
-  // 글자별 버퍼들) > (CC0 말소리 풀은 §8.2 소싱 전이라 없음).
-  const chopPool: AudioBuffer[] = userKitBuffersResolved?.voice
-    ? [userKitBuffersResolved.voice]
-    : voiceBank
-      ? [...voiceBank.values()]
-      : [];
+  // f 목소리 조각(§6.4.1 소스 우선순위): 내 소리 voice 슬롯만 쓴다. CC0 말소리 풀(§8.2)은
+  // 아직 소싱 전이고, 로봇 목소리는 일부러 폴백에서 뺐다(위 comment) — 비어 있으면
+  // scheduleStyleBar가 formantVox 합성으로 대신한다.
+  const chopPool: AudioBuffer[] = userKitBuffersResolved?.voice ? [userKitBuffersResolved.voice] : [];
+  // p·f `chord`(§7.1/§7.4): 이 마디의 코드 뿌리를 돌려주는 함수 하나로 넘긴다.
+  const chordRootAt =
+    pattern.style === "p"
+      ? (barIndex: number) => pChordRootAt(pattern.styleGenome!, barIndex)
+      : pattern.style === "f"
+        ? (barIndex: number) => fChordRootAt(pattern.styleGenome!, barIndex)
+        : null;
 
   const rig: Rig = {
     ctx,
@@ -1924,13 +1966,38 @@ async function buildRig(
     voices: {
       bass: createVoice(ctx, strips.bass, pattern.bassVoice, noise, duration, 0.6, tapeWobble),
       lead: createVoice(ctx, strips.lead, pattern.leadVoice, noise, duration, 0.25, tapeWobble),
-      // p의 chop 찬트(§7.7 formantVox)는 arp 슬롯을 빌려 쓴다 — open/k/d는 arp 레이어 자체가
-      // 없어서(§16.7) 이 슬롯이 원래도 비어 있었다.
-      arp: createVoice(ctx, strips.arp, pattern.style === "p" ? "formantVox" : "square", noise, duration, 0.45, tapeWobble),
+      // p의 chop 찬트, f의 chop 합성 폴백(둘 다 §7.1 formantVox)은 arp 슬롯을 빌려 쓴다 —
+      // open/k/d는 arp 레이어 자체가 없어서(§16.7) 이 슬롯이 원래도 비어 있었다.
+      arp: createVoice(
+        ctx,
+        strips.arp,
+        pattern.style === "p" || pattern.style === "f" ? "formantVox" : "square",
+        noise,
+        duration,
+        0.45,
+        tapeWobble
+      ),
       seqRiff: createVoice(ctx, strips.seqRiff, pattern.style === "d" ? "cheapSynth" : "triSub", noise, duration, 0.4, tapeWobble),
       seqRun: createVoice(ctx, strips.seqRun, "sawUnison", noise, duration, 0.35, tapeWobble),
     },
-    stabVoices: [0, 1, 2].map(() => createVoice(ctx, strips.stab, "sawUnison", noise, duration, 0.4, tapeWobble)),
+    // p·f의 chord(§7.1): clubHouse의 브레이크·halfBeat는 superPad, slowJam은 fmEPiano, f는
+    // 곡 전체에서 계속 나오는 배경이라 superPad. open/k/d는 여태처럼 sawUnison(stab 원래
+    // 용도, compute 계열 화음 채우기).
+    stabVoices: [0, 1, 2].map(() =>
+      createVoice(
+        ctx,
+        strips.stab,
+        pattern.style === "f" || (pattern.style === "p" && pattern.blueprintId === "clubHouse")
+          ? "superPad"
+          : pattern.style === "p" && pattern.blueprintId === "slowJam"
+            ? "fmEPiano"
+            : "sawUnison",
+        noise,
+        duration,
+        0.4,
+        tapeWobble
+      )
+    ),
     strips,
     bank,
     pattern,
@@ -1954,6 +2021,7 @@ async function buildRig(
     hookPlan: hookPlanResult,
     chopPlan: chopPlanResult,
     chopPool,
+    chordRootAt,
   };
 
   return { ctx, rig };

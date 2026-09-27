@@ -597,6 +597,23 @@ function pChordToneCandidates(rootDegree: number): number[] {
   return [rootDegree, rootDegree + 2, rootDegree + 4, rootDegree + 6, rootDegree + 7];
 }
 
+// §7.4 진행표의 main 배열을 실제 마디 번호로 순환한다(마디 length 합으로 나눈 나머지) —
+// chord 레이어(stabVoices)가 지금 몇 번째 코드를 잡고 있는지 여기서 정한다.
+function progressionRootAt(main: readonly { degree: number; bars: number }[], barIndex: number): number {
+  const total = main.reduce((sum, step) => sum + step.bars, 0);
+  let pos = ((barIndex % total) + total) % total;
+  for (const step of main) {
+    if (pos < step.bars) return step.degree;
+    pos -= step.bars;
+  }
+  return main[main.length - 1].degree;
+}
+
+/** p `chord`(§7.1 fmEPiano/superPad, halfBeat·break·chorus 등)가 이 마디에 잡을 코드 뿌리. */
+export function pChordRootAt(g: StyleGenome, barIndex: number): number {
+  return progressionRootAt(pProgDef(g).main, barIndex);
+}
+
 // ---------------------------------------------------------------- p: 찬트 후크 (§7.7)
 
 // 8음절씩, 16종 전부 달라야 한다(테스트로 확인). "-"은 쉼.
@@ -734,6 +751,11 @@ export function fScale(g: StyleGenome): Scale {
   return makeScale(g.key ?? 0, F_MODES[def.mode], def.mode);
 }
 
+/** f `chord`(§7.1 superPad)가 이 마디에 잡을 코드 뿌리. */
+export function fChordRootAt(g: StyleGenome, barIndex: number): number {
+  return progressionRootAt(fProgDef(g).main, barIndex);
+}
+
 // ---------------------------------------------------------------- f: 목소리 조각(chop) (§6.4.1/§7.7)
 
 export interface ChopNote {
@@ -744,6 +766,9 @@ export interface ChopNote {
   /** 조각 풀에서 몇 번째를 쓸지(풀 길이로 mod한다) — 사용자 목소리 1개뿐이면 그 버퍼
    *  안에서 4등분한 구간 중 하나를 고르는 데도 같은 값을 쓴다(audioEngine.ts). */
   sliceIndex: number;
+  /** 조각 풀이 비어 있을 때(내 소리도 없고 CC0 말소리 풀도 아직 없을 때)만 쓰는 합성
+   *  대체음의 음정 — 스케일 디그리 단위, 현재 화성의 코드톤. */
+  degree: number;
 }
 
 const CHOP_RATES = [1.0, 0.8, 0.66, 0.5];
@@ -756,5 +781,12 @@ export function chopPlan(g: StyleGenome): readonly ChopNote[] {
   const rhythm = HOOK_RHYTHMS[(chop >> 4) & 0b1111];
   const rate = CHOP_RATES[chop & 0b11];
   const sliceBase = (chop >> 2) & 0b11;
-  return rhythm.map((at, i) => ({ at, rate, sliceIndex: (sliceBase + i) % 4 }));
+  const tones = [0, 2, 4].map((offset) => fChordRootAt(g, 0) + offset); // 근음·3도·5도
+  const digits = decodeRiffPitch(g.riffPitch ?? 0);
+  return rhythm.map((at, i) => ({
+    at,
+    rate,
+    sliceIndex: (sliceBase + i) % 4,
+    degree: tones[digits[i] % tones.length],
+  }));
 }

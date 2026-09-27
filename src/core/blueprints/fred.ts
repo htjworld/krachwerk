@@ -32,7 +32,7 @@ export const garageShuffle: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 6000, to: 6000 },
-      cues: [cue("pad"), cue("chop"), cue("clapLayer")],
+      cues: [cue("chord"), cue("chop"), cue("clapLayer")],
     },
     {
       id: "build",
@@ -41,7 +41,7 @@ export const garageShuffle: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 6000, to: 6000 },
-      cues: [cue("pad"), cue("chop"), cue("clapLayer"), cue("openHat")],
+      cues: [cue("chord"), cue("chop"), cue("clapLayer"), cue("openHat")],
     },
     {
       id: "drop1",
@@ -50,7 +50,7 @@ export const garageShuffle: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 8000, to: 8000 },
-      cues: [cue("kick"), cue("clap"), cue("hat"), cue("openHat"), cue("perc"), cue("bass"), cue("pad"), cue("chop", { barGate: 0.4 })],
+      cues: [cue("kick"), cue("clap"), cue("hat"), cue("openHat"), cue("perc"), cue("bass"), cue("chord"), cue("chop", { barGate: 0.4 })],
     },
     {
       id: "bassOut1",
@@ -59,7 +59,7 @@ export const garageShuffle: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 8000, to: 8000 },
-      cues: [cue("kick"), cue("clap"), cue("hat"), cue("openHat"), cue("perc"), cue("pad"), cue("chop")],
+      cues: [cue("kick"), cue("clap"), cue("hat"), cue("openHat"), cue("perc"), cue("chord"), cue("chop")],
     },
     {
       id: "main1",
@@ -68,7 +68,7 @@ export const garageShuffle: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 8000, to: 8000 },
-      cues: [cue("kick"), cue("clap"), cue("hat"), cue("openHat"), cue("perc"), cue("bass"), cue("pad"), cue("chop")],
+      cues: [cue("kick"), cue("clap"), cue("hat"), cue("openHat"), cue("perc"), cue("bass"), cue("chord"), cue("chop")],
     },
     {
       id: "bassOut2",
@@ -77,7 +77,7 @@ export const garageShuffle: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 8000, to: 8000 },
-      cues: [cue("kick"), cue("clap"), cue("hat"), cue("openHat"), cue("perc"), cue("pad"), cue("chop")],
+      cues: [cue("kick"), cue("clap"), cue("hat"), cue("openHat"), cue("perc"), cue("chord"), cue("chop")],
     },
     {
       id: "main2",
@@ -86,7 +86,7 @@ export const garageShuffle: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 8000, to: 8000 },
-      cues: [cue("kick"), cue("clap"), cue("hat"), cue("openHat"), cue("perc"), cue("bass"), cue("pad"), cue("chop")],
+      cues: [cue("kick"), cue("clap"), cue("hat"), cue("openHat"), cue("perc"), cue("bass"), cue("chord"), cue("chop")],
     },
     {
       id: "bassOut3",
@@ -95,7 +95,7 @@ export const garageShuffle: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 8000, to: 8000 },
-      cues: [cue("kick"), cue("clap"), cue("hat"), cue("openHat"), cue("perc"), cue("pad"), cue("chop")],
+      cues: [cue("kick"), cue("clap"), cue("hat"), cue("openHat"), cue("perc"), cue("chord"), cue("chop")],
     },
     {
       id: "breakdown",
@@ -104,7 +104,7 @@ export const garageShuffle: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 5000, to: 5000 },
-      cues: [cue("pad"), cue("chop")],
+      cues: [cue("chord"), cue("chop")],
     },
     {
       id: "drumsBack",
@@ -114,7 +114,7 @@ export const garageShuffle: Blueprint = {
       fill: [],
       drumGainDb: -6,
       filter: { from: 7000, to: 7000 },
-      cues: [cue("kick"), cue("clap"), cue("hat"), cue("openHat"), cue("perc"), cue("bass"), cue("pad"), cue("chop")],
+      cues: [cue("kick"), cue("clap"), cue("hat"), cue("openHat"), cue("perc"), cue("bass"), cue("chord"), cue("chop")],
     },
     { id: "voiceStop", bars: 4, intensity: 0.3, drumFamily: "none", fill: [], filter: { from: 6000, to: 6000 }, cues: [cue("chop")] },
     {
@@ -124,7 +124,7 @@ export const garageShuffle: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 8500, to: 8500 },
-      cues: [cue("kick"), cue("clap"), cue("hat"), cue("openHat"), cue("perc"), cue("bass"), cue("pad"), cue("chop")],
+      cues: [cue("kick"), cue("clap"), cue("hat"), cue("openHat"), cue("perc"), cue("bass"), cue("chord"), cue("chop")],
     },
     {
       id: "switch",
@@ -134,7 +134,7 @@ export const garageShuffle: Blueprint = {
       fill: [],
       beatShift: 1,
       filter: { from: 8500, to: 8500 },
-      cues: [cue("kick"), cue("clap"), cue("hat"), cue("openHat"), cue("perc"), cue("bass"), cue("pad"), cue("chop")],
+      cues: [cue("kick"), cue("clap"), cue("hat"), cue("openHat"), cue("perc"), cue("bass"), cue("chord"), cue("chop")],
     },
     {
       id: "outro",
@@ -145,7 +145,7 @@ export const garageShuffle: Blueprint = {
       beatShift: 1,
       drumGainDb: -6,
       filter: { from: 6000, to: 6000 },
-      cues: [cue("kick"), cue("clap"), cue("hat"), cue("openHat"), cue("perc"), cue("pad"), cue("chop")],
+      cues: [cue("kick"), cue("clap"), cue("hat"), cue("openHat"), cue("perc"), cue("chord"), cue("chop")],
     },
     { id: "end", bars: 1, intensity: 0.1, drumFamily: "none", fill: [], endFill: "stop", filter: { from: 6000, to: 6000 }, cues: [] },
   ],
@@ -192,7 +192,7 @@ export const halfStep: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 7000, to: 7000 },
-      cues: [cue("kick"), cue("clap"), cue("hat"), cue("bass"), cue("chop"), cue("pad")],
+      cues: [cue("kick"), cue("clap"), cue("hat"), cue("bass"), cue("chop"), cue("chord")],
     },
     {
       id: "dropOut1",
@@ -201,7 +201,7 @@ export const halfStep: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 6000, to: 6000 },
-      cues: [cue("hat"), cue("clap"), cue("pad"), cue("chop")],
+      cues: [cue("hat"), cue("clap"), cue("chord"), cue("chop")],
     },
     {
       id: "full2",
@@ -210,7 +210,7 @@ export const halfStep: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 7500, to: 7500 },
-      cues: [cue("kick"), cue("clap"), cue("hat"), cue("bass", { skipBars: [7, 11] }), cue("pad"), cue("chop")],
+      cues: [cue("kick"), cue("clap"), cue("hat"), cue("bass", { skipBars: [7, 11] }), cue("chord"), cue("chop")],
     },
     { id: "dropOut2", bars: 6, intensity: 0.4, drumFamily: "none", fill: [], filter: { from: 5500, to: 5500 }, cues: [] },
     {
@@ -220,9 +220,9 @@ export const halfStep: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 7500, to: 7500 },
-      cues: [cue("kick"), cue("clap"), cue("hat"), cue("bass"), cue("pad"), cue("chop")],
+      cues: [cue("kick"), cue("clap"), cue("hat"), cue("bass"), cue("chord"), cue("chop")],
     },
-    { id: "fullStop", bars: 2, intensity: 0.35, drumFamily: "none", fill: [], filter: { from: 6000, to: 6000 }, cues: [cue("pad"), cue("chop")] },
+    { id: "fullStop", bars: 2, intensity: 0.35, drumFamily: "none", fill: [], filter: { from: 6000, to: 6000 }, cues: [cue("chord"), cue("chop")] },
     { id: "dropOut3", bars: 4, intensity: 0.4, drumFamily: "none", fill: [], filter: { from: 5500, to: 5500 }, cues: [] },
     {
       id: "full4",
@@ -231,7 +231,7 @@ export const halfStep: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 8000, to: 8000 },
-      cues: [cue("kick"), cue("clap"), cue("hat"), cue("bass"), cue("pad"), cue("chop")],
+      cues: [cue("kick"), cue("clap"), cue("hat"), cue("bass"), cue("chord"), cue("chop")],
     },
     {
       id: "bassOut",
@@ -240,7 +240,7 @@ export const halfStep: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 7000, to: 7000 },
-      cues: [cue("kick"), cue("clap"), cue("hat"), cue("pad"), cue("chop")],
+      cues: [cue("kick"), cue("clap"), cue("hat"), cue("chord"), cue("chop")],
     },
     {
       id: "strip",
@@ -265,7 +265,7 @@ export const switchUp: Blueprint = {
   sidechain: { synthDb: -10, bassDb: -28, releaseBeats: 0.6 },
   synthWidth: 0.9,
   sections: [
-    { id: "intro", bars: 6, intensity: 0.3, drumFamily: "none", fill: [], filter: { from: 6000, to: 6000 }, cues: [cue("pad"), cue("chop")] },
+    { id: "intro", bars: 6, intensity: 0.3, drumFamily: "none", fill: [], filter: { from: 6000, to: 6000 }, cues: [cue("chord"), cue("chop")] },
     {
       id: "full1",
       bars: 8,
@@ -273,7 +273,7 @@ export const switchUp: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 8000, to: 8000 },
-      cues: [cue("kick"), cue("clap"), cue("openHat"), cue("perc"), cue("bass"), cue("pad"), cue("chop")],
+      cues: [cue("kick"), cue("clap"), cue("openHat"), cue("perc"), cue("bass"), cue("chord"), cue("chop")],
     },
     {
       id: "bassOut",
@@ -291,7 +291,7 @@ export const switchUp: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 8000, to: 8000 },
-      cues: [cue("kick"), cue("clap"), cue("openHat"), cue("perc"), cue("bass", { skipBars: [9] }), cue("pad"), cue("chop")],
+      cues: [cue("kick"), cue("clap"), cue("openHat"), cue("perc"), cue("bass", { skipBars: [9] }), cue("chord"), cue("chop")],
     },
     { id: "stop1", bars: 1, intensity: 0.2, drumFamily: "none", fill: [], filter: { from: 6000, to: 6000 }, cues: [cue("chop")] },
     {
@@ -301,9 +301,9 @@ export const switchUp: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 8000, to: 8000 },
-      cues: [cue("kick"), cue("clap"), cue("openHat"), cue("perc"), cue("bass"), cue("pad"), cue("chop")],
+      cues: [cue("kick"), cue("clap"), cue("openHat"), cue("perc"), cue("bass"), cue("chord"), cue("chop")],
     },
-    { id: "stop2", bars: 1, intensity: 0.2, drumFamily: "none", fill: [], filter: { from: 6000, to: 6000 }, cues: [cue("pad"), cue("chop")] },
+    { id: "stop2", bars: 1, intensity: 0.2, drumFamily: "none", fill: [], filter: { from: 6000, to: 6000 }, cues: [cue("chord"), cue("chop")] },
     {
       id: "full4",
       bars: 16,
@@ -311,7 +311,7 @@ export const switchUp: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 8000, to: 8000 },
-      cues: [cue("kick"), cue("clap"), cue("openHat"), cue("perc"), cue("bass", { skipBars: [9] }), cue("pad"), cue("chop")],
+      cues: [cue("kick"), cue("clap"), cue("openHat"), cue("perc"), cue("bass", { skipBars: [9] }), cue("chord"), cue("chop")],
     },
     { id: "stop3", bars: 1, intensity: 0.2, drumFamily: "none", fill: [], filter: { from: 6000, to: 6000 }, cues: [cue("chop")] },
     {
@@ -322,7 +322,7 @@ export const switchUp: Blueprint = {
       fill: [],
       kitSwap: "sub808",
       filter: { from: 8500, to: 8500 },
-      cues: [cue("kick"), cue("clap"), cue("openHat"), cue("perc"), cue("bass"), cue("pad"), cue("chop")],
+      cues: [cue("kick"), cue("clap"), cue("openHat"), cue("perc"), cue("bass"), cue("chord"), cue("chop")],
     },
     { id: "stop4", bars: 1, intensity: 0.2, drumFamily: "none", fill: [], filter: { from: 6000, to: 6000 }, cues: [cue("chop")] },
     {
@@ -333,7 +333,7 @@ export const switchUp: Blueprint = {
       fill: [],
       kitSwap: "sub808",
       filter: { from: 8500, to: 8500 },
-      cues: [cue("kick"), cue("clap"), cue("openHat"), cue("perc"), cue("bass"), cue("pad"), cue("chop")],
+      cues: [cue("kick"), cue("clap"), cue("openHat"), cue("perc"), cue("bass"), cue("chord"), cue("chop")],
     },
     {
       id: "halfFeel",
@@ -343,10 +343,10 @@ export const switchUp: Blueprint = {
       fill: [],
       kitSwap: "sub808",
       filter: { from: 7000, to: 7000 },
-      cues: [cue("kick"), cue("clap", { rateSteps: [{ atBar: 0, rate: 4 }] }), cue("openHat"), cue("bass"), cue("pad")],
+      cues: [cue("kick"), cue("clap", { rateSteps: [{ atBar: 0, rate: 4 }] }), cue("openHat"), cue("bass"), cue("chord")],
       drumOverride: { clap: [8] },
     },
-    { id: "outro", bars: 7, intensity: 0.35, drumFamily: "none", fill: [], filter: { from: 5500, to: 5500 }, cues: [cue("pad")] },
+    { id: "outro", bars: 7, intensity: 0.35, drumFamily: "none", fill: [], filter: { from: 5500, to: 5500 }, cues: [cue("chord")] },
     { id: "end", bars: 2, intensity: 0.1, drumFamily: "none", fill: [], endFill: "stop", filter: { from: 6000, to: 6000 }, cues: [] },
   ],
 };

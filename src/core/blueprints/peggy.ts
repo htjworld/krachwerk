@@ -76,7 +76,7 @@ export const clubHouse: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 6000, to: 6000 },
-      cues: [cue("seqRiff"), cue("pad")],
+      cues: [cue("seqRiff"), cue("chord")],
     },
     {
       id: "halfBeat",
@@ -89,7 +89,7 @@ export const clubHouse: Blueprint = {
       cues: [
         cue("kick", { rateSteps: [{ atBar: 0, rate: 4 }] }),
         cue("clap", { rateSteps: [{ atBar: 0, rate: 4 }] }),
-        cue("pad"),
+        cue("chord"),
         cue("chop"),
         cue("seqRiff"),
       ],
@@ -215,7 +215,7 @@ export const slowJam: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 6000, to: 6000 },
-      cues: [cue("bass"), cue("pad")],
+      cues: [cue("bass"), cue("chord")],
     },
     {
       id: "drumsIn",
@@ -224,7 +224,7 @@ export const slowJam: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 6000, to: 6000 },
-      cues: [cue("kick"), cue("clap"), cue("hat"), cue("bass"), cue("pad")],
+      cues: [cue("kick"), cue("clap"), cue("hat"), cue("bass"), cue("chord")],
     },
     {
       id: "verse1",
@@ -233,7 +233,7 @@ export const slowJam: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 6000, to: 6000 },
-      cues: [cue("kick"), cue("clap"), cue("hat"), cue("bass"), cue("pad"), cue("lead")],
+      cues: [cue("kick"), cue("clap"), cue("hat"), cue("bass"), cue("chord"), cue("lead")],
     },
     {
       id: "pre",
@@ -251,7 +251,7 @@ export const slowJam: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 6000, to: 6000 },
-      cues: [cue("kick"), cue("clap"), cue("hat"), cue("bass"), cue("lead"), cue("pad"), cue("chop")],
+      cues: [cue("kick"), cue("clap"), cue("hat"), cue("bass"), cue("lead"), cue("chord"), cue("chop")],
     },
     {
       id: "turn",
@@ -266,7 +266,7 @@ export const slowJam: Blueprint = {
         cue("hat", { rateSteps: [{ atBar: 0, rate: 16, density: 150 }] }),
         cue("bass"),
         cue("lead"),
-        cue("pad"),
+        cue("chord"),
         cue("chop"),
       ],
     },
@@ -286,7 +286,7 @@ export const slowJam: Blueprint = {
       drumFamily: "none",
       fill: [],
       filter: { from: 6000, to: 6000 },
-      cues: [cue("kick"), cue("clap"), cue("hat"), cue("bass"), cue("lead"), cue("pad"), cue("chop")],
+      cues: [cue("kick"), cue("clap"), cue("hat"), cue("bass"), cue("lead"), cue("chord"), cue("chop")],
     },
     {
       id: "outro",
@@ -301,7 +301,7 @@ export const slowJam: Blueprint = {
         cue("hat", { rateSteps: [{ atBar: 0, rate: 16, density: 195 }] }),
         cue("bass"),
         cue("lead"),
-        cue("pad"),
+        cue("chord"),
         cue("chop"),
       ],
     },

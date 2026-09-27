@@ -90,6 +90,7 @@ function buildFakeRig(pattern: Pattern): { rig: Rig; events: LoggedEvent[] } {
     hookPlan: null,
     chopPlan: null,
     chopPool: [],
+    chordRootAt: null,
   };
   return { rig, events: log.events };
 }
