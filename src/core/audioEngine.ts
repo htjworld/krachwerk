@@ -1490,6 +1490,16 @@ export function barJitterSeconds(pattern: Pattern, barIndex: number): number {
 }
 
 /**
+ * 마디 시작 절대 시각(초) = 나중값 + 지터. 지터는 음수일 수 있어서(±J) 마디 0에서 그대로
+ * 더하면 시각이 음수가 될 수 있다 — Web Audio API(setValueAtTime/start)는 음수 시각을
+ * 던지므로(브라우저 콘솔에 "startTime must be a positive value" 같은 에러) 0 밑으로는
+ * 못 내려가게 막는다. 맨 첫 히트 하나만 아주 살짝(최대 20ms) 덜 흔들릴 뿐이다.
+ */
+export function barStartSeconds(pattern: Pattern, barIndex: number, barSeconds: number): number {
+  return Math.max(0, barIndex * barSeconds + barJitterSeconds(pattern, barIndex));
+}
+
+/**
  * §13.6 item 6: styleMaps가 있는 새 블루프린트(d/p/f) 전용 경로. v2 scheduleBar 본문과
  * 완전히 분리해 둬서 블루프린트를 9개 늘려도 저쪽 함수는 한 줄도 안 자란다.
  *
@@ -2025,8 +2035,8 @@ export async function renderArrangement(pattern: Pattern, options: RenderOptions
     for (let sectionBar = 0; sectionBar < section.bars; sectionBar++) {
       const barIndex = section.startBar + sectionBar;
       const rng = mulberry32((pattern.seedHash ^ ((barIndex + 1) * 0x9e3779b1)) >>> 0);
-      const jitter = barJitterSeconds(pattern, barIndex);
-      scheduleBar(rig, section, barIndex, sectionBar, barIndex * arrangement.barSeconds + jitter, rng, arrangement.swing);
+      const barStart = barStartSeconds(pattern, barIndex, arrangement.barSeconds);
+      scheduleBar(rig, section, barIndex, sectionBar, barStart, rng, arrangement.swing);
     }
   }
 

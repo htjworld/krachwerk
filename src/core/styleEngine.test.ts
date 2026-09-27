@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { generatePattern, type Pattern } from "./pattern";
 import {
   barJitterSeconds,
+  barStartSeconds,
   scheduleBar,
   secondsPerStep,
   tapeJitterMs,
@@ -349,6 +350,16 @@ describe("마디 흔들림 barJitterSeconds (§6.5 item 3)", () => {
       for (let bar = 0; bar < 40; bar++) {
         const pattern = basePattern({ styleGenome: { style: "d", tape }, seedHash: (bar * 97 + tape * 31 + 1) >>> 0 });
         expect(Math.abs(barJitterSeconds(pattern, bar))).toBeLessThanOrEqual(j + 1e-9);
+      }
+    }
+  });
+
+  it("barStartSeconds는 마디 0에서도 절대 음수가 아니다 (실제로 브라우저에서 크래시난 버그: " +
+    "지터가 음수일 때 마디 0의 절대 시각이 음수가 돼서 Web Audio API의 setValueAtTime/start가 던졌다)", () => {
+    for (let tape = 0; tape < 16; tape++) {
+      for (let seedHash = 0; seedHash < 200; seedHash++) {
+        const pattern = basePattern({ styleGenome: { style: "d", tape }, seedHash });
+        expect(barStartSeconds(pattern, 0, 2.0)).toBeGreaterThanOrEqual(0);
       }
     }
   });
