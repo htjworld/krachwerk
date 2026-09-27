@@ -774,8 +774,8 @@ button {
   font-size: 0.85em;
 }
 
-.userkit-file-row .device-input {
-  width: auto;
-  padding: 4px 8px;
-  font-size: 0.85em;
+.userkit-file-meta {
+  flex-shrink: 0;
+  font-size: 0.75em;
+  color: var(--fg-muted);
 }

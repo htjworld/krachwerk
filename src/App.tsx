@@ -19,8 +19,8 @@ import {
   listFiles,
   addFile,
   removeFile,
-  updateSlot,
   clearAll,
+  sourceCount,
   type UserKitFile,
 } from "./core/userKitStore";
 import { restoreRedirectedPath, readRoute, pushRoute, replaceRoute, buildSeedUrl, type RouteParams } from "./routing";
@@ -77,10 +77,6 @@ function AppContent() {
     void removeFile(id);
     setUserKitFiles((prev) => prev.filter((f) => f.id !== id));
   };
-  const handleUpdateUserKitSlot = (id: string, slot: UserSlot) => {
-    void updateSlot(id, slot);
-    setUserKitFiles((prev) => prev.map((f) => (f.id === id ? { ...f, slot } : f)));
-  };
   const handleClearUserKit = () => {
     void clearAll();
     setUserKitFiles([]);
@@ -135,7 +131,7 @@ function AppContent() {
       <div className="ambient-bg">
         <div className="device-stack device-stack--wide">
           <Logo />
-          <SeedScreen onGenerate={handleGenerate} myKitCount={userKitFiles.length} />
+          <SeedScreen onGenerate={handleGenerate} myKitCount={sourceCount(userKitFiles)} />
         </div>
         <LanguageToggle />
       </div>
@@ -160,7 +156,6 @@ function AppContent() {
           userKit={userKit}
           onAddUserKitFiles={handleAddUserKitFiles}
           onRemoveUserKitFile={handleRemoveUserKitFile}
-          onUpdateUserKitSlot={handleUpdateUserKitSlot}
           onClearUserKit={handleClearUserKit}
           receivedLocalKit={receivedLocalKit}
         />

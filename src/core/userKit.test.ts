@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifySample, ROLE_TO_USER_SLOT } from "./userKit";
+import { classifySample, ROLE_TO_USER_SLOT, sliceUserSound } from "./userKit";
 
 const SAMPLE_RATE = 44100;
 
@@ -67,5 +67,38 @@ describe("ROLE_TO_USER_SLOT (§15.4 표)", () => {
   it("tick/calls처럼 표에 없는 역할은 매핑이 없다(사용자 소리로 안 바뀐다)", () => {
     expect(ROLE_TO_USER_SLOT.tick).toBeUndefined();
     expect(ROLE_TO_USER_SLOT.calls).toBeUndefined();
+  });
+});
+
+describe("sliceUserSound", () => {
+  const peakOf = (d: Float32Array) => d.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+
+  it("3초 이하 소리는 원 샷 하나로, 슬롯은 자동 분류하고 피크를 −1dBFS로 맞춘다", () => {
+    const quiet = sine(60, 0.3).map((v) => v * 0.1);
+    const slices = sliceUserSound(quiet, SAMPLE_RATE);
+    expect(slices).toHaveLength(1);
+    expect(slices[0].slot).toBe("kick");
+    expect(peakOf(slices[0].data)).toBeCloseTo(0.89, 2);
+  });
+
+  it("긴 소리(곡)는 짧은 타격 조각 2개와 2초 목소리 조각 1개로 줄인다", () => {
+    // 30초짜리 조용한 바탕 위에 센 타격 셋과 큰 소리 구간 하나.
+    const song = sine(220, 30).map((v) => v * 0.05);
+    const burst = noise(0.2);
+    for (const at of [3, 12, 25]) song.set(burst, Math.round(at * SAMPLE_RATE));
+    const loud = sine(440, 2.5);
+    song.set(loud, Math.round(17 * SAMPLE_RATE));
+
+    const slices = sliceUserSound(song, SAMPLE_RATE);
+    expect(slices).toHaveLength(3);
+    const [hitA, hitB, phrase] = slices;
+    for (const hit of [hitA, hitB]) {
+      expect(hit.slot).not.toBe("voice");
+      expect(hit.data.length / SAMPLE_RATE).toBeLessThanOrEqual(0.35 + 1e-9);
+    }
+    expect(phrase.slot).toBe("voice");
+    expect(phrase.data.length / SAMPLE_RATE).toBeLessThanOrEqual(2 + 1e-9);
+    // 조각 끝은 페이드로 0에 닿아 딸깍거리지 않는다.
+    for (const { data } of slices) expect(Math.abs(data[data.length - 1])).toBeLessThan(0.01);
   });
 });

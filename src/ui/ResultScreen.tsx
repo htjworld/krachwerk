@@ -12,7 +12,7 @@ import {
   type CrosshairControl,
   type UserSlot,
 } from "../core";
-import type { UserKitFile } from "../core/userKitStore";
+import { sourceCount, type UserKitFile } from "../core/userKitStore";
 import { usePlayer, type Player } from "./usePlayer";
 import { MatrixEditor } from "./MatrixEditor";
 import { CrosshairPanel } from "./CrosshairPanel";
@@ -31,7 +31,6 @@ interface Props {
   userKit: Partial<Record<UserSlot, ArrayBuffer[]>> | null;
   onAddUserKitFiles: (files: UserKitFile[]) => void;
   onRemoveUserKitFile: (id: string) => void;
-  onUpdateUserKitSlot: (id: string, slot: UserSlot) => void;
   onClearUserKit: () => void;
   receivedLocalKit: boolean;
 }
@@ -159,7 +158,6 @@ export function ResultScreen({
   userKit,
   onAddUserKitFiles,
   onRemoveUserKitFile,
-  onUpdateUserKitSlot,
   onClearUserKit,
   receivedLocalKit,
 }: Props) {
@@ -295,7 +293,7 @@ export function ResultScreen({
             <span className="tool-tile-label">{t("resultScreen.tool.sounds")}</span>
             <span className="tool-tile-value">
               {userKitFiles.length > 0
-                ? t("resultScreen.tool.soundsCount", { count: userKitFiles.length })
+                ? t("resultScreen.tool.soundsCount", { count: sourceCount(userKitFiles) })
                 : t("resultScreen.tool.soundsDefault")}
             </span>
           </button>
@@ -308,7 +306,6 @@ export function ResultScreen({
           files={userKitFiles}
           onAddFiles={onAddUserKitFiles}
           onRemoveFile={onRemoveUserKitFile}
-          onUpdateSlot={onUpdateUserKitSlot}
           onClearAll={onClearUserKit}
         />
       )}

@@ -5,10 +5,18 @@ import type { UserSlot } from "./userKit";
 
 export interface UserKitFile {
   id: string;
+  /** 사용자가 넣은 원본 파일 이름. 조각이 여러 개면 전부 같은 이름이다. */
   name: string;
+  /** 같은 원본에서 나온 조각들이 공유하는 값. 예전에 저장된 파일에는 없다(그땐 id가 곧 원본이다). */
+  group?: string;
   slot: UserSlot;
   data: ArrayBuffer;
   addedAt: number;
+}
+
+/** 조각을 원본 단위로 센다(화면에 "내 소리 N개"로 보이는 수). */
+export function sourceCount(files: readonly UserKitFile[]): number {
+  return new Set(files.map((f) => f.group ?? f.id)).size;
 }
 
 const DB_NAME = "krachwerk-kit";
@@ -78,21 +86,6 @@ export async function removeFile(id: string): Promise<void> {
     await withStore("readwrite", (store) => store.delete(id));
   } catch {
     // 지우기 실패는 치명적이지 않다 — 조용히 넘어간다.
-  }
-}
-
-export async function updateSlot(id: string, slot: UserSlot): Promise<void> {
-  if (memoryFallback) {
-    const file = memoryFallback.find((f) => f.id === id);
-    if (file) file.slot = slot;
-    return;
-  }
-  try {
-    const files = await listFiles();
-    const file = files.find((f) => f.id === id);
-    if (file) await withStore("readwrite", (store) => store.put({ ...file, slot }));
-  } catch {
-    // 조용히 넘어간다.
   }
 }
 

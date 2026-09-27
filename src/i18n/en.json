@@ -51,7 +51,7 @@
       "live": "Live",
       "sounds": "My sounds",
       "soundsDefault": "Default kit",
-      "soundsCount": "{count} files"
+      "soundsCount": "{count} added"
     },
     "edited": "EDITED"
   },
@@ -63,15 +63,9 @@
     "loading": "Loading",
     "reset": "Reset to default sounds",
     "remove": "Remove",
-    "slot": {
-      "kick": "Kick",
-      "snare": "Snare",
-      "hat": "Hat",
-      "perc": "Percussion",
-      "sig": "Signature",
-      "voice": "Voice & everyday sounds"
-    },
-    "voiceHint": "Add speech or room sounds and FRED/DELROY-style tracks will chop them."
+    "voiceHint": "Anything longer than 3 seconds is cut down to its three sharpest pieces and mixed into the track for you.",
+    "pieces": "{count} pieces",
+    "oneShot": "One-shot"
   },
   "matrix": {
     "drumTab": "DRUM",

@@ -63,15 +63,9 @@
     "loading": "불러오는 중",
     "reset": "기본 소리로",
     "remove": "지우기",
-    "slot": {
-      "kick": "킥",
-      "snare": "스네어",
-      "hat": "햇",
-      "perc": "퍼커션",
-      "sig": "시그니처",
-      "voice": "목소리·일상 소리"
-    },
-    "voiceHint": "말소리나 주변 소리를 넣으면 FRED·DELROY 스타일 곡이 그걸 잘라 씁니다."
+    "voiceHint": "3초가 넘는 소리는 가장 선명한 조각 세 개만 잘라서 곡 안에 알아서 섞어요.",
+    "pieces": "조각 {count}개",
+    "oneShot": "원 샷"
   },
   "matrix": {
     "drumTab": "DRUM",

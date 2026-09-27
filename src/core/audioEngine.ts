@@ -54,7 +54,7 @@ import { deriveTrack, type Track } from "./track";
 import { loadVoiceForCode, type VoiceLang } from "./voiceBank";
 import { loadSigSample, type SigSampleKind } from "./sigBank";
 import { loadSynthKit, type SynthKit } from "./drumSynth";
-import { ROLE_TO_USER_SLOT, USER_SLOTS, type UserSlot } from "./userKit";
+import { ONE_SHOT_MAX_SECONDS, ROLE_TO_USER_SLOT, USER_SLOTS, type UserSlot } from "./userKit";
 import { loadTonalSample } from "./tonalBank";
 
 /** stepsPerBar 기본값 16(4분음표 하나에 16분 4칸). 12(8분 셋잇단, shuffle12 §6.2)는 한 마디를
@@ -1827,7 +1827,10 @@ async function resolveUserKitBuffers(
     const files = userKit[slot];
     if (files && files.length > 0) {
       const rng = mulberry32((seedHash ^ Math.imul(index + 1, 0x9e3779b1)) >>> 0);
-      result[slot] = await ctx.decodeAudioData(pick(rng, files).slice(0));
+      const buffer = await ctx.decodeAudioData(pick(rng, files).slice(0));
+      // 조각 내기 전에 통째로 저장된 긴 파일(곡 한 곡 등)은 타격마다 전체가 겹쳐 지지직거린다 —
+      // 그 슬롯은 기본 소리로 둔다. 지금 넣는 소리는 전부 sliceUserSound를 거쳐 3초 이하다.
+      if (buffer.duration <= ONE_SHOT_MAX_SECONDS + 0.5) result[slot] = buffer;
     }
   }
   return Object.keys(result).length > 0 ? result : null;
