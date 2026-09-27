@@ -115,6 +115,7 @@ function buildRig(
     styleKit: opts.styleKit ?? { kick: {} as AudioBuffer, clap: {} as AudioBuffer, hat: {} as AudioBuffer },
     sub808Kit: opts.sub808Kit ?? {},
     bassSidechain: opts.bassSidechain ?? null,
+    hookPlan: null,
   };
   return { rig, log };
 }

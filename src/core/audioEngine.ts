@@ -24,7 +24,7 @@ import {
 import { blueprintFor } from "./blueprints";
 import { legacyCue } from "./blueprints/legacy";
 import { targetSecondsFor, targetSecondsForStyle } from "./genome";
-import { styleBass, styleDrumMaps, styleRiff, type DrumMap } from "./styleMotifs";
+import { hookPlan, styleBass, styleDrumMaps, styleRiff, type DrumMap, type HookNote } from "./styleMotifs";
 import { loadStyleKit } from "./drumSynth";
 import {
   computeBass,
@@ -1163,14 +1163,16 @@ export interface Rig {
   /** 260927 §6.1 신규. 새 블루프린트(d/p/f)의 드럼 중요도·세기표(styleDrumMaps 결과).
    *  open/k는 항상 null — scheduleBar가 이 값의 유무로 옛 경로/scheduleStyleBar를 가른다. */
   styleMaps: Partial<Record<LayerId, DrumMap>> | null;
-  /** 260927 §13.6 신규. 새 블루프린트 드럼 원샷(§7.2 tape/house/garage 프리셋, 단계 6에서
-   *  채운다). 지금은 항상 null. */
+  /** 260927 §13.6 신규. 새 블루프린트 드럼 원샷(§7.2 tape/house/garage 프리셋). blueprint에
+   *  kitFamily가 있을 때만 채운다. */
   styleKit: Partial<Record<DrumRole, AudioBuffer>> | null;
-  /** 260927 §13.6 신규. `kitSwap: "sub808"` 섹션 동안 대신 쓰는 킷(f switchUp, 단계 6). */
+  /** 260927 §13.6 신규. `kitSwap: "sub808"` 섹션 동안 대신 쓰는 킷(f switchUp, 단계 10). */
   sub808Kit: Partial<Record<DrumRole, AudioBuffer>> | null;
   /** 260927 §6.5 신규. 베이스 전용 사이드체인 버스 — blueprint.sidechain이 있을 때만 채운다.
    *  없으면 베이스도 지금처럼 mix.music → mix.sidechain 공유 펌핑을 그대로 탄다. */
   bassSidechain: GainNode | null;
+  /** 260927 §7.7 신규. p `chop` 찬트 후크(2마디 고정 패턴). p가 아니면 null. */
+  hookPlan: readonly HookNote[] | null;
 }
 
 export function scheduleBar(
@@ -1594,6 +1596,26 @@ function scheduleStyleBar(
     }
   }
 
+  // p 찬트 후크(§7.7 chop): 2마디 고정 패턴(rig.hookPlan)을 barIndex%2로 앞/뒷마디 절반을
+  // 골라 튼다. formantVox 목소리는 rig.voices.arp가 맡는다(§13.6 위 comment).
+  if (rig.hookPlan) {
+    const chopCue = cueFor(section, "chop", sectionBar);
+    if (
+      chopCue &&
+      !chopCue.skipBars?.includes(sectionBar) &&
+      (chopCue.barGate === undefined || hashRand(pattern.seedHash, BAR_GATE_SALT, barIndex, 13) < chopCue.barGate)
+    ) {
+      const barParity = barIndex % 2;
+      for (const note of rig.hookPlan) {
+        if (Math.floor(note.at / 16) !== barParity) continue;
+        const step = note.at % 16;
+        if (!cueActiveAtStep(section, "chop", sectionBar, step)) continue;
+        const freq = midiToFrequency(degreeToMidi(pattern.scale, note.degree));
+        rig.voices.arp.note(atSynth(step), freq, rig.stepDur * 3, 0.5);
+      }
+    }
+  }
+
   const applyFill = (kind: FillKind) => {
     // 16칸 전용 필(stepFill/roll13/halfBar8/pickup15)이 실수로 12칸 블루프린트에 붙어도
     // 격자 밖 스텝은 여기서 걸러진다(§6.2) — 이 필터 하나가 그 금지 규칙의 실제 강제 장치다.
@@ -1765,7 +1787,7 @@ async function buildRig(
       ? computeRiff(pattern.genome)
       : family === "metropolis"
         ? metropolisSeq(pattern.genome)
-        : pattern.style === "d"
+        : pattern.style === "d" || pattern.style === "p"
           ? styleRiff(pattern.blueprintId, pattern.styleGenome!)
           : null;
   const motifBass =
@@ -1776,12 +1798,15 @@ async function buildRig(
             const b = metropolisBass(pattern.genome);
             return { cells: b.cells, gateBeats: b.gateBeats };
           })()
-        : pattern.style === "d"
+        : pattern.style === "d" || pattern.style === "p"
           ? (() => {
               const b = styleBass(pattern.blueprintId, pattern.styleGenome!, pattern.scale);
               return { cells: b.cells[0], gateBeats: b.gate };
             })()
           : null;
+  // p 찬트 후크(§7.7). 2마디(0~31, 16분 격자) 고정 패턴 — 마디마다 barIndex%2로 어느 마디의
+  // 절반을 쓸지 고른다(scheduleStyleBar).
+  const hookPlanResult = pattern.style === "p" ? hookPlan(pattern.styleGenome!) : null;
   // "calls" 큐: 기본 compute + k 스타일(codeRead 섹션, metropolisK는 pulseIntro/breakdown도)만
   // 쓴다(§16.4, kraftwerkK.ts). 언어는 게놈 밖 — 곡 정체성과 무관하다.
   const voiceLang: VoiceLang = pattern.seedHash % 2 === 0 ? "de" : "en";
@@ -1840,7 +1865,9 @@ async function buildRig(
     voices: {
       bass: createVoice(ctx, strips.bass, pattern.bassVoice, noise, duration, 0.6, tapeWobble),
       lead: createVoice(ctx, strips.lead, pattern.leadVoice, noise, duration, 0.25, tapeWobble),
-      arp: createVoice(ctx, strips.arp, "square", noise, duration, 0.45, tapeWobble),
+      // p의 chop 찬트(§7.7 formantVox)는 arp 슬롯을 빌려 쓴다 — open/k/d는 arp 레이어 자체가
+      // 없어서(§16.7) 이 슬롯이 원래도 비어 있었다.
+      arp: createVoice(ctx, strips.arp, pattern.style === "p" ? "formantVox" : "square", noise, duration, 0.45, tapeWobble),
       seqRiff: createVoice(ctx, strips.seqRiff, pattern.style === "d" ? "cheapSynth" : "triSub", noise, duration, 0.4, tapeWobble),
       seqRun: createVoice(ctx, strips.seqRun, "sawUnison", noise, duration, 0.35, tapeWobble),
     },
@@ -1865,6 +1892,7 @@ async function buildRig(
     styleKit,
     sub808Kit: null,
     bassSidechain,
+    hookPlan: hookPlanResult,
   };
 
   return { ctx, rig };

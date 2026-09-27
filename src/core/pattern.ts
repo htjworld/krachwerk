@@ -3,10 +3,10 @@ import { SCALES, type Scale } from "./scales";
 import { VOICES, type VoiceId } from "./voices";
 import { seedToGenome, kToV2Genome, type Genome, type StyleGenome } from "./genome";
 import { blueprintIdFor, legacyDrumVariantFor, legacyKickPattern, computeScale, metropolisScale } from "./motifs";
-import { blueprintFor, dBlueprintIdFor, kBlueprintIdFor } from "./blueprints";
+import { blueprintFor, dBlueprintIdFor, kBlueprintIdFor, pBlueprintIdFor } from "./blueprints";
 import { blueprintFamily, type BlueprintId } from "./blueprint";
 import type { StyleId } from "./blueprint";
-import { dScale } from "./styleMotifs";
+import { dScale, pScale } from "./styleMotifs";
 
 export const STEP_COUNT = 16;
 
@@ -167,6 +167,7 @@ function styleBlueprintIdFor(styleGenome: StyleGenome): BlueprintId {
     case "d":
       return dBlueprintIdFor(form);
     case "p":
+      return pBlueprintIdFor(form);
     case "f":
       throw new Error(`generatePattern: 스타일 "${styleGenome.style}"은 아직 구현되지 않았다`);
   }
@@ -189,20 +190,37 @@ function generateStylePattern(result: {
   // 써야 요약 화면(pattern.scale.name)이 실제로 나는 소리와 어긋나지 않는다. 보이스는
   // timbre 비트 0~1(§5.4)로, 전 6종이 아니라 그 계열에 맞는 후보 2개 중에서 고른다.
   // d: 화성이 사실상 고정(§4.1 D12)이라 dScale 하나, 보이스는 cheapSynth 고정(§13.5).
+  // p: 화성은 prog(§7.4)가 정하고, 보이스는 블루프린트별로 고정(clubHouse sawUnison/square,
+  // slowJam organBass/fmEPiano) — k처럼 timbre 비트로 후보를 고르지 않는다.
   const timbre = styleGenome.timbre ?? 0;
-  const scale = family === "metropolis" ? metropolisScale(genome) : family === "compute" ? computeScale(genome) : dScale(styleGenome);
+  const scale =
+    family === "metropolis"
+      ? metropolisScale(genome)
+      : family === "compute"
+        ? computeScale(genome)
+        : styleGenome.style === "p"
+          ? pScale(styleGenome)
+          : dScale(styleGenome);
   const bassVoice: VoiceId =
     family === "metropolis"
       ? K_BASS_VOICES.metropolis[timbre & 1]
       : family === "compute"
         ? K_BASS_VOICES.compute[timbre & 1]
-        : "cheapSynth";
+        : styleGenome.style === "p"
+          ? blueprintId === "slowJam"
+            ? "organBass"
+            : "sawUnison"
+          : "cheapSynth";
   const leadVoice: VoiceId =
     family === "metropolis"
       ? K_LEAD_VOICES.metropolis[(timbre >> 1) & 1]
       : family === "compute"
         ? K_LEAD_VOICES.compute[(timbre >> 1) & 1]
-        : "cheapSynth";
+        : styleGenome.style === "p"
+          ? blueprintId === "slowJam"
+            ? "fmEPiano"
+            : "square"
+          : "cheapSynth";
 
   const rng = mulberry32(seedHash);
   const { bass, lead } = fillLegacyBassLead(rng);

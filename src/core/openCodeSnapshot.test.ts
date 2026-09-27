@@ -87,6 +87,7 @@ function buildFakeRig(pattern: Pattern): { rig: Rig; events: LoggedEvent[] } {
     styleKit: null,
     sub808Kit: null,
     bassSidechain: null,
+    hookPlan: null,
   };
   return { rig, events: log.events };
 }

@@ -1,10 +1,12 @@
 // 260927 §13.4: 새 블루프린트(d/p/f) 전용 모티프. §6.1 드럼 경로 원칙 — 블루프린트는
 // rateSteps[].density만 적고, 실제 중요도·세기표는 여기서 곡마다 만들어 rig.styleMaps로
-// audioEngine.ts에 넘긴다. d(§7.3/§7.5/§7.6)만 채웠다 — p/f는 단계 9~10에서 채운다.
+// audioEngine.ts에 넘긴다. d(§7.3/§7.5/§7.6)·p(§7.3/§7.4/§7.5/§7.6/§7.7)를 채웠다 — f는
+// 단계 10에서 채운다.
 import type { BlueprintId, LayerId } from "./blueprint";
 import type { StyleGenome } from "./genome";
 import type { StepCell } from "./pattern";
 import { makeScale, type Scale } from "./scales";
+import { mulberry32 } from "./prng";
 
 /** 마디 하나치 중요도·세기표. 길이 = 그 블루프린트의 stepsPerBar. */
 export interface DrumMap {
@@ -202,6 +204,75 @@ function shuffle12Maps(dv: number): Partial<Record<LayerId, DrumMap>> {
   };
 }
 
+// ---------------------------------------------------------------- p: 드럼 중요도 맵 (§7.3)
+
+const CLUBHOUSE_OPENHAT_ROLL = [14, 15];
+const CLUBHOUSE_HAT_BLANK = [[3, 7, 11], [5, 13], [3, 11], []];
+// Nanana 실측(§3.7).
+const CLUBHOUSE_HAT_VELOCITY = [1.0, 0.56, 1.0, 0.3, 0.98, 0.31, 1.0, 0.38, 1.0, 0.49, 1.0, 0.34, 0.94, 0.32, 1.0, 0.52];
+const CLUBHOUSE_PERC_GROUPS = [[0, 3, 7, 10], [2, 5, 9, 12], [1, 4, 6, 11, 14], [3, 6, 11]];
+
+function clubHouseMaps(dv: number): Partial<Record<LayerId, DrumMap>> {
+  const kick = Array(16).fill(0);
+  setSteps(kick, [0, 4, 8, 12], () => 255);
+  // ponytail: b7("4마디마다 스텝15 픽업")은 styleDrumMaps가 마디 하나치만 만들어서(주기적
+  // 픽업은 barIndex가 필요하다) 아직 안 쓴다 — 게놈 엔트로피에는 그대로 남아 있다.
+
+  const clap = Array(16).fill(0);
+  setSteps(clap, [4, 12], () => 255);
+
+  const openHat = Array(16).fill(0);
+  setSteps(openHat, [2, 6, 10, 14], () => 255);
+  if (dv & 1) openHat[15] = stepPriority16(15);
+  if ((dv >> 1) & 1) for (const s of CLUBHOUSE_OPENHAT_ROLL) openHat[s] = stepPriority16(s);
+
+  const hat: number[] = Array.from({ length: 16 }, (_, s) => (s % 2 === 0 ? 240 : 150));
+  for (const s of CLUBHOUSE_HAT_BLANK[(dv >> 2) & 0b11]) hat[s] = 0;
+
+  const perc = Array(16).fill(0);
+  setSteps(perc, CLUBHOUSE_PERC_GROUPS[(dv >> 4) & 0b11], stepPriority16);
+  if ((dv >> 6) & 1) setSteps(perc, [7, 15], stepPriority16);
+
+  return {
+    kick: { priority: kick, velocity: uniformVelocity(1.0, 16) },
+    clap: { priority: clap, velocity: uniformVelocity(0.9, 16) },
+    openHat: { priority: openHat, velocity: uniformVelocity(0.8, 16) },
+    hat: { priority: hat, velocity: CLUBHOUSE_HAT_VELOCITY },
+    perc: { priority: perc, velocity: uniformVelocity(0.55, 16) },
+  };
+}
+
+const SLOWJAM_KICK_GROUPS = [[2, 3, 9, 10], [2, 10], [3, 10, 11], [2, 3, 9]];
+const SLOWJAM_HAT_BLANK = [[], [6, 14], [7], [12]];
+// Believe In Love Again 실측(§3.8), 홀수 강.
+const SLOWJAM_HAT_VELOCITY = [0.63, 1.0, 0.84, 1.0, 0.68, 1.0, 0.6, 0.79, 0.76, 1.0, 0.53, 1.0, 0.41, 1.0, 0.48, 1.0];
+const SLOWJAM_PERC_GROUPS = [[2], [10], [2, 10], []];
+
+function slowJamMaps(dv: number): Partial<Record<LayerId, DrumMap>> {
+  const kick = Array(16).fill(0);
+  setSteps(kick, [0, 8], () => 255);
+  setSteps(kick, SLOWJAM_KICK_GROUPS[dv & 0b11], stepPriority16);
+  if ((dv >> 7) & 1) kick[15] = stepPriority16(15);
+
+  const clap = Array(16).fill(0);
+  clap[13] = 255;
+  const extraStep = (dv >> 2) & 1 ? 5 : 4;
+  clap[extraStep] = stepPriority16(extraStep);
+
+  const hat = Array(16).fill(255);
+  for (const s of SLOWJAM_HAT_BLANK[(dv >> 3) & 0b11]) hat[s] = 0;
+
+  const perc = Array(16).fill(0);
+  setSteps(perc, SLOWJAM_PERC_GROUPS[(dv >> 5) & 0b11], stepPriority16);
+
+  return {
+    kick: { priority: kick, velocity: uniformVelocity(1.0, 16) },
+    clap: { priority: clap, velocity: uniformVelocity(0.9, 16) },
+    hat: { priority: hat, velocity: SLOWJAM_HAT_VELOCITY },
+    perc: { priority: perc, velocity: uniformVelocity(0.5, 16) },
+  };
+}
+
 export function styleDrumMaps(id: BlueprintId, g: StyleGenome): Partial<Record<LayerId, DrumMap>> {
   const dv = g.drumVariant ?? 0;
   switch (id) {
@@ -213,6 +284,10 @@ export function styleDrumMaps(id: BlueprintId, g: StyleGenome): Partial<Record<L
       return beachDemoMaps(dv);
     case "shuffle12":
       return shuffle12Maps(dv);
+    case "clubHouse":
+      return clubHouseMaps(dv);
+    case "slowJam":
+      return slowJamMaps(dv);
     default:
       return {};
   }
@@ -254,9 +329,19 @@ function styleBassFor(
   return { cells: [cells], gate };
 }
 
+// ponytail: p §7.5 원래 표는 클럽하우스가 2마디(마디 A/B) 패턴 + 코드톤 집합 + 순서 규칙까지
+// 있지만, d와 같은 "리듬 + 마지막 히트만 이웃음 + 옥타브 점프" 모델로 단순화했다 — 리듬(가장
+// 잘 들리는 요소)은 표 그대로 옮기고, 정확한 음 집합·순회 규칙은 브라우저 청취 후 필요하면
+// 더한다.
+const P_CLUBHOUSE_BASS_RHYTHM = [[0, 3, 6, 8, 11, 14], [0, 3, 6, 10, 12], [0, 2, 6, 8, 10, 14], [0, 3, 6, 8, 11, 14]];
+const P_SLOWJAM_BASS_RHYTHM = [[1, 3, 6, 9, 11, 14], [2, 6, 10, 14], [3, 7, 11, 15], [1, 6, 9, 14]];
+const P_BASS_OCTAVE = [[], [], [], []];
+
 export function styleBass(id: BlueprintId, g: StyleGenome, scale: Scale): { cells: StepCell[][]; gate: number } {
   const octaveLen = scale.intervals.length;
   if (id === "shuffle12") return styleBassFor(D12_BASS_RHYTHM, D12_BASS_OCTAVE, 12, g, octaveLen);
+  if (id === "clubHouse") return styleBassFor(P_CLUBHOUSE_BASS_RHYTHM, P_BASS_OCTAVE, 16, g, octaveLen);
+  if (id === "slowJam") return styleBassFor(P_SLOWJAM_BASS_RHYTHM, P_BASS_OCTAVE, 16, g, octaveLen);
   return styleBassFor(D16_BASS_RHYTHM, D16_BASS_OCTAVE, 16, g, octaveLen);
 }
 
@@ -289,7 +374,16 @@ export function styleRiff(id: BlueprintId, g: StyleGenome): StepCell[] {
   const stepsPerBar = id === "shuffle12" ? 12 : 16;
   const on = decodeRiffRhythm(g.riffRhythm ?? 0, stepsPerBar);
   const digits = decodeRiffPitch(g.riffPitch ?? 0);
-  const candidates = id === "beachDemo" ? D_BEACH_RIFF_CANDIDATES : D_RIFF_CANDIDATES;
+  // p(§7.6): "코드톤 우선"이라 d의 반음계 후보 대신 현재 화성의 코드톤(근음·3도·5도·7도·
+  // 옥타브, 스케일 디그리 단위)에서 고른다. ponytail: 진행(prog)이 마디마다 바뀌어도
+  // 곡 전체에서 첫 코드(bar 0) 기준 하나만 쓴다 — 실제로 코드를 재생하는 chord 레이어
+  // 자체를 이번 단계에서 뺐다(§4.2 P16의 딜레이 효과가 더 크게 들리는 seqRiff 우선).
+  const candidates =
+    id === "beachDemo"
+      ? D_BEACH_RIFF_CANDIDATES
+      : id === "clubHouse" || id === "slowJam"
+        ? pChordToneCandidates(pRootDegree(g))
+        : D_RIFF_CANDIDATES;
 
   const cells: StepCell[] = Array.from({ length: stepsPerBar }, () => ({ on: false, degree: 0 }));
   let n = 0;
@@ -299,4 +393,139 @@ export function styleRiff(id: BlueprintId, g: StyleGenome): StepCell[] {
     n++;
   }
   return cells;
+}
+
+// ---------------------------------------------------------------- p: 화성·리프 코드톤 (§7.4)
+
+const P_MODES: Record<"aeolian" | "dorian" | "ionian", readonly number[]> = {
+  aeolian: [0, 2, 3, 5, 7, 8, 10],
+  dorian: [0, 2, 3, 5, 7, 9, 10],
+  ionian: [0, 2, 4, 5, 7, 9, 11],
+};
+
+interface PProgDef {
+  mode: keyof typeof P_MODES;
+  main: readonly { degree: number; bars: number }[];
+}
+
+// §7.4 표. 브레이크 코드(halfBeat 등)는 아직 실제로 재생하는 곳이 없어서(위 ponytail 메모)
+// 뺐다 — main 진행의 뿌리 자리만 남긴다.
+const P_PROG: readonly PProgDef[] = [
+  { mode: "aeolian", main: [{ degree: 0, bars: 1 }] },
+  { mode: "aeolian", main: [{ degree: 0, bars: 1 }] },
+  {
+    mode: "aeolian",
+    main: [
+      { degree: 0, bars: 2 },
+      { degree: 5, bars: 2 },
+    ],
+  },
+  {
+    mode: "aeolian",
+    main: [
+      { degree: 0, bars: 2 },
+      { degree: 6, bars: 2 },
+    ],
+  },
+  {
+    mode: "aeolian",
+    main: [
+      { degree: 0, bars: 2 },
+      { degree: 3, bars: 2 },
+    ],
+  },
+  {
+    mode: "aeolian",
+    main: [
+      { degree: 0, bars: 1 },
+      { degree: 5, bars: 1 },
+      { degree: 2, bars: 1 },
+      { degree: 6, bars: 1 },
+    ],
+  },
+  {
+    mode: "dorian",
+    main: [
+      { degree: 0, bars: 2 },
+      { degree: 3, bars: 2 },
+    ],
+  },
+  {
+    mode: "ionian",
+    main: [
+      { degree: 0, bars: 2 },
+      { degree: 3, bars: 2 },
+    ],
+  },
+];
+
+function pProgDef(g: StyleGenome): PProgDef {
+  return P_PROG[(g.prog ?? 0) % P_PROG.length];
+}
+
+export function pScale(g: StyleGenome): Scale {
+  const def = pProgDef(g);
+  return makeScale(g.key ?? 0, P_MODES[def.mode], def.mode);
+}
+
+/** 곡 전체가 기준으로 삼는 화성 뿌리(첫 코드, bar 0) — 스케일 디그리 단위. */
+function pRootDegree(g: StyleGenome): number {
+  return pProgDef(g).main[0].degree;
+}
+
+function pChordToneCandidates(rootDegree: number): number[] {
+  // 근음·3도·5도·7도·옥타브(스케일 3도씩 쌓기 — 어떤 모드든 그 모드의 화성음이 나온다).
+  return [rootDegree, rootDegree + 2, rootDegree + 4, rootDegree + 6, rootDegree + 7];
+}
+
+// ---------------------------------------------------------------- p: 찬트 후크 (§7.7)
+
+// 8음절씩, 16종 전부 달라야 한다(테스트로 확인). "-"은 쉼.
+export const HOOK_SYLLABLES: readonly (readonly string[])[] = [
+  ["na", "na", "na", "na", "na", "na", "na", "na"],
+  ["na", "na", "na", "-", "na", "na", "na", "-"],
+  ["la", "la", "oh", "-", "la", "la", "oh", "-"],
+  ["oh", "-", "oh", "-", "ah", "-", "ah", "-"],
+  ["na", "-", "na", "-", "na", "-", "na", "-"],
+  ["na", "la", "na", "la", "na", "la", "na", "la"],
+  ["oh", "oh", "ah", "ah", "oh", "oh", "ah", "ah"],
+  ["na", "na", "la", "la", "oh", "oh", "ah", "ah"],
+  ["ah", "ah", "ah", "-", "ah", "ah", "ah", "-"],
+  ["la", "-", "la", "-", "la", "-", "la", "-"],
+  ["na", "oh", "na", "oh", "na", "oh", "na", "oh"],
+  ["na", "na", "na", "na", "-", "-", "-", "-"],
+  ["-", "na", "na", "-", "na", "na", "-", "na"],
+  ["la", "la", "la", "la", "ah", "ah", "ah", "ah"],
+  ["oh", "na", "la", "ah", "oh", "na", "la", "ah"],
+  ["na", "ah", "na", "ah", "oh", "la", "oh", "la"],
+];
+
+// 8개 음 위치, 2마디(0~31, 16분 격자) 안. ponytail: 원곡 후크 리듬을 그대로 안 넣으려고(R2)
+// 결정론적으로 뽑았다 — 8개씩 오름차순, 16개가 서로 다름은 테스트로 확인한다.
+function genHookRhythm(seed: number): number[] {
+  const rng = mulberry32(seed);
+  const positions = new Set<number>();
+  while (positions.size < 8) positions.add(Math.floor(rng() * 32));
+  return [...positions].sort((a, b) => a - b);
+}
+export const HOOK_RHYTHMS: readonly (readonly number[])[] = Array.from({ length: 16 }, (_, i) =>
+  genHookRhythm((0x9e3779b9 ^ Math.imul(i + 1, 0x1000193)) >>> 0)
+);
+
+export interface HookNote {
+  /** 2마디(16분 격자 0~31) 안 위치. bar = Math.floor(at/16), step = at%16. */
+  at: number;
+  syllable: string;
+  degree: number;
+}
+
+/** p `chop` 찬트(§7.7). formantVox로만 합성한다(소스 파일 없음) — 모음 자체는 지금은 항상
+ *  "a"(§7.1 formantVox 제한)라 syllable은 리듬·타이밍에만 쓰인다. */
+export function hookPlan(g: StyleGenome): readonly HookNote[] {
+  const hook = g.hook ?? 0;
+  const syllables = HOOK_SYLLABLES[hook & 0b1111];
+  const rhythm = HOOK_RHYTHMS[(hook >> 4) & 0b1111];
+  const digits = decodeRiffPitch(g.riffPitch ?? 0);
+  const tones = pChordToneCandidates(pRootDegree(g)).slice(0, 3); // 근음·3도·5도만
+  return rhythm.map((at, i) => ({ at, syllable: syllables[i], degree: tones[digits[i] % tones.length] }));
 }
