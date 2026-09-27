@@ -10,9 +10,9 @@ interface Props {
 // 게놈/코드 순서 k·d·p·f와는 다르다 — 화면 순서만 요구 4를 따른다).
 const DISPLAY_ORDER: readonly StyleLetter[] = ["k", "d", "f", "p"];
 
-// d/p 앨범커버 스타일은 아직 blueprint가 없어서(generatePattern이 던진다) 얼굴은 보여주되
+// p/f 앨범커버 스타일은 아직 blueprint가 없어서(generatePattern이 던진다) 얼굴은 보여주되
 // 눌러도 반응하지 않는다 — 그 스타일 구현이 끝나면 이 배열에서 뺀다.
-const IMPLEMENTED: readonly StyleLetter[] = ["k"];
+const IMPLEMENTED: readonly StyleLetter[] = ["k", "d"];
 
 function faceUrl(style: StyleLetter): string {
   const base = import.meta.env?.BASE_URL ?? "/";

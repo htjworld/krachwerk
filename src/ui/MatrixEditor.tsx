@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n/i18n";
 import {
-  STEP_COUNT,
   secondsPerStep,
   loopDurationSeconds,
   resolveLayers,
@@ -21,7 +20,10 @@ interface Props {
   tempo: number;
 }
 
-const STEP_LABEL_POSITIONS = [3, 7, 11, 15];
+const STEP_LABEL_POSITIONS: Record<16 | 12, readonly number[]> = {
+  16: [3, 7, 11, 15],
+  12: [2, 5, 8, 11],
+};
 
 export function MatrixEditor({ pattern, override, onOverrideChange, onShuffle, onShare, player, tempo }: Props) {
   const { t } = useI18n();
@@ -36,18 +38,20 @@ export function MatrixEditor({ pattern, override, onOverrideChange, onShuffle, o
     }
     const tick = () => {
       const elapsed = player.getPosition();
-      const loopDuration = loopDurationSeconds(tempo);
-      const stepDuration = secondsPerStep(tempo);
+      const loopDuration = loopDurationSeconds(tempo, pattern.stepsPerBar);
+      const stepDuration = secondsPerStep(tempo, pattern.stepsPerBar);
       const position = ((elapsed % loopDuration) + loopDuration) % loopDuration;
       setPlayheadStep(Math.floor(position / stepDuration));
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [player, tempo]);
+  }, [player, tempo, pattern.stepsPerBar]);
 
   const resolved = resolveLayers(pattern, override);
-  const cells = tab === "drum" ? resolved.kick : resolved.lead.map((c) => c.on);
+  // 260927 §9.5: PatternOverride.kick은 16비트 인코딩 그대로 두고(§6.2), 매트릭스는
+  // stepsPerBar만큼만 그린다 — shuffle12(12칸)에서 안 쓰는 뒤 4칸이 안 보인다.
+  const cells = (tab === "drum" ? resolved.kick : resolved.lead.map((c) => c.on)).slice(0, pattern.stepsPerBar);
 
   const toggleStep = (index: number) => {
     const kick = resolved.kick.slice();
@@ -78,7 +82,7 @@ export function MatrixEditor({ pattern, override, onOverrideChange, onShuffle, o
         </button>
       </div>
 
-      <div className="matrix-grid">
+      <div className="matrix-grid" style={{ ["--steps" as string]: pattern.stepsPerBar }}>
         {cells.map((on, i) => (
           <button
             key={i}
@@ -90,10 +94,10 @@ export function MatrixEditor({ pattern, override, onOverrideChange, onShuffle, o
           />
         ))}
       </div>
-      <div className="matrix-step-labels">
-        {Array.from({ length: STEP_COUNT }, (_, i) => (
+      <div className="matrix-step-labels" style={{ ["--steps" as string]: pattern.stepsPerBar }}>
+        {Array.from({ length: pattern.stepsPerBar }, (_, i) => (
           <span key={i} style={{ textAlign: "center" }}>
-            {STEP_LABEL_POSITIONS.includes(i) ? i + 1 : ""}
+            {STEP_LABEL_POSITIONS[pattern.stepsPerBar].includes(i) ? i + 1 : ""}
           </span>
         ))}
       </div>

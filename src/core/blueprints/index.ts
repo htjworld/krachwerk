@@ -4,6 +4,9 @@
 import type { Blueprint, BlueprintId } from "../blueprint";
 import { blueprintById, type OpenBlueprintId } from "./legacy";
 import { computeK, metropolisK } from "./kraftwerkK";
+import { beachDemo, dBlueprintIdFor, fourFloorJam, shuffle12, tapeJam } from "./delroy";
+
+export { dBlueprintIdFor };
 
 const OPEN_IDS: readonly OpenBlueprintId[] = ["compute", "metropolis", "classicBuild", "slowBurn", "doubleDrop"];
 
@@ -27,6 +30,14 @@ export function blueprintFor(id: BlueprintId): Blueprint {
       return computeK;
     case "metropolisK":
       return metropolisK;
+    case "tapeJam":
+      return tapeJam;
+    case "fourFloorJam":
+      return fourFloorJam;
+    case "beachDemo":
+      return beachDemo;
+    case "shuffle12":
+      return shuffle12;
     default:
       throw new Error(`blueprintFor: 아직 구현되지 않은 블루프린트 id "${id}"`);
   }

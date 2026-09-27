@@ -3,9 +3,10 @@ import { SCALES, type Scale } from "./scales";
 import { VOICES, type VoiceId } from "./voices";
 import { seedToGenome, kToV2Genome, type Genome, type StyleGenome } from "./genome";
 import { blueprintIdFor, legacyDrumVariantFor, legacyKickPattern, computeScale, metropolisScale } from "./motifs";
-import { blueprintFor, kBlueprintIdFor } from "./blueprints";
+import { blueprintFor, dBlueprintIdFor, kBlueprintIdFor } from "./blueprints";
 import { blueprintFamily, type BlueprintId } from "./blueprint";
 import type { StyleId } from "./blueprint";
+import { dScale } from "./styleMotifs";
 
 export const STEP_COUNT = 16;
 
@@ -164,6 +165,7 @@ function styleBlueprintIdFor(styleGenome: StyleGenome): BlueprintId {
     case "k":
       return kBlueprintIdFor(form);
     case "d":
+      return dBlueprintIdFor(form);
     case "p":
     case "f":
       throw new Error(`generatePattern: 스타일 "${styleGenome.style}"은 아직 구현되지 않았다`);
@@ -186,10 +188,21 @@ function generateStylePattern(result: {
   // k: 조성은 v2 compute/metropolis와 같은 함수로(§13.5) — buildRig의 motifScale과 같은 값을
   // 써야 요약 화면(pattern.scale.name)이 실제로 나는 소리와 어긋나지 않는다. 보이스는
   // timbre 비트 0~1(§5.4)로, 전 6종이 아니라 그 계열에 맞는 후보 2개 중에서 고른다.
+  // d: 화성이 사실상 고정(§4.1 D12)이라 dScale 하나, 보이스는 cheapSynth 고정(§13.5).
   const timbre = styleGenome.timbre ?? 0;
-  const scale = family === "metropolis" ? metropolisScale(genome) : computeScale(genome);
-  const bassVoice = (family === "metropolis" ? K_BASS_VOICES.metropolis : K_BASS_VOICES.compute)[timbre & 1];
-  const leadVoice = (family === "metropolis" ? K_LEAD_VOICES.metropolis : K_LEAD_VOICES.compute)[(timbre >> 1) & 1];
+  const scale = family === "metropolis" ? metropolisScale(genome) : family === "compute" ? computeScale(genome) : dScale(styleGenome);
+  const bassVoice: VoiceId =
+    family === "metropolis"
+      ? K_BASS_VOICES.metropolis[timbre & 1]
+      : family === "compute"
+        ? K_BASS_VOICES.compute[timbre & 1]
+        : "cheapSynth";
+  const leadVoice: VoiceId =
+    family === "metropolis"
+      ? K_LEAD_VOICES.metropolis[(timbre >> 1) & 1]
+      : family === "compute"
+        ? K_LEAD_VOICES.compute[(timbre >> 1) & 1]
+        : "cheapSynth";
 
   const rng = mulberry32(seedHash);
   const { bass, lead } = fillLegacyBassLead(rng);

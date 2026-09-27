@@ -24,7 +24,8 @@ import {
 import { blueprintFor } from "./blueprints";
 import { legacyCue } from "./blueprints/legacy";
 import { targetSecondsFor, targetSecondsForStyle } from "./genome";
-import { styleDrumMaps, type DrumMap } from "./styleMotifs";
+import { styleBass, styleDrumMaps, styleRiff, type DrumMap } from "./styleMotifs";
+import { loadStyleKit } from "./drumSynth";
 import {
   computeBass,
   computeRiff,
@@ -110,6 +111,26 @@ function makeNoiseBuffer(ctx: BaseAudioContext, seed: number, durationSeconds: n
   const data = buffer.getChannelData(0);
   const rng = mulberry32(seed);
   for (let i = 0; i < length; i++) data[i] = rng() * 2 - 1;
+  return buffer;
+}
+
+// §6.5 item 2 / §4.1 D10(테이프 히스). Paul Kellet의 3단 근사 — 실시간 필터 노드 대신 짧은
+// 루프 버퍼 하나로 미리 굽는다(§1.4 성능 규칙, makeNoiseBuffer와 같은 방식).
+function makePinkNoiseBuffer(ctx: BaseAudioContext, seed: number, seconds: number): AudioBuffer {
+  const length = Math.round(ctx.sampleRate * seconds);
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  const rng = mulberry32(seed);
+  let b0 = 0;
+  let b1 = 0;
+  let b2 = 0;
+  for (let i = 0; i < length; i++) {
+    const white = rng() * 2 - 1;
+    b0 = 0.99765 * b0 + white * 0.099046;
+    b1 = 0.963 * b1 + white * 0.2965164;
+    b2 = 0.57 * b2 + white * 1.0526913;
+    data[i] = (b0 + b1 + b2 + white * 0.1848) * 0.11;
+  }
   return buffer;
 }
 
@@ -1530,6 +1551,49 @@ function scheduleStyleBar(
     }
   }
 
+  // 신스 레이어(베이스·리프): styleMaps에 없어서 위 드럼 루프를 안 타고 따로 처리한다.
+  // rig.motifBass/motifRiff는 buildRig가 styleBass/styleRiff로 미리 채워 둔 패턴 — 마디마다
+  // 같은 걸 반복한다(§4.1 D1: 드럼 루프는 곡 전체에서 한 가지, 신스도 같은 원칙). beatShift는
+  // "신스·베이스는 안 민다"(§6.1)라 여기선 안 쓴다 — 드럼용 at()과 다른 별도 시각 함수를 쓴다.
+  const atSynth = (step: number) => barStart + step * rig.stepDur + (step % 2 === 1 ? effectiveSwing * rig.stepDur : 0);
+  const synthLayers: {
+    layer: LayerId;
+    voice: MonoVoice;
+    source: readonly StepCell[];
+    noteLen: number;
+    level: number;
+    salt: number;
+  }[] = [];
+  // rig.motifBass/motifRiff가 null이면(=이 Rig가 신스 없이 드럼 경로만 테스트하는 픽스처거나
+  // 아직 지원 안 하는 스타일이면) rig.voices를 아예 안 건드린다.
+  if (rig.motifBass) {
+    synthLayers.push({
+      layer: "bass",
+      voice: rig.voices.bass,
+      source: rig.motifBass.cells,
+      noteLen: (rig.motifBass.gateBeats ?? 2) * rig.stepDur,
+      level: 0.8,
+      salt: 10,
+    });
+  }
+  if (rig.motifRiff) {
+    synthLayers.push({ layer: "seqRiff", voice: rig.voices.seqRiff, source: rig.motifRiff, noteLen: rig.stepDur * 1.5, level: 0.55, salt: 11 });
+    synthLayers.push({ layer: "lead", voice: rig.voices.lead, source: rig.motifRiff, noteLen: rig.stepDur * 1.5, level: 0.5, salt: 12 });
+  }
+  for (const sl of synthLayers) {
+    const cue = cueFor(section, sl.layer, sectionBar);
+    if (!cue) continue;
+    if (cue.skipBars?.includes(sectionBar)) continue;
+    if (cue.barGate !== undefined && hashRand(pattern.seedHash, BAR_GATE_SALT, barIndex, sl.salt) >= cue.barGate) continue;
+    for (let step = 0; step < stepsPerBar; step++) {
+      if (!cueActiveAtStep(section, sl.layer, sectionBar, step)) continue;
+      const cell = sl.source[step];
+      if (!cell?.on) continue;
+      const freq = midiToFrequency(degreeToMidi(pattern.scale, cell.degree));
+      sl.voice.note(atSynth(step), freq, sl.noteLen, sl.level);
+    }
+  }
+
   const applyFill = (kind: FillKind) => {
     // 16칸 전용 필(stepFill/roll13/halfBar8/pickup15)이 실수로 12칸 블루프린트에 붙어도
     // 격자 밖 스텝은 여기서 걸러진다(§6.2) — 이 필터 하나가 그 금지 규칙의 실제 강제 장치다.
@@ -1697,7 +1761,13 @@ async function buildRig(
         ? metropolisScale(pattern.genome)
         : pattern.scale;
   const motifRiff =
-    family === "compute" ? computeRiff(pattern.genome) : family === "metropolis" ? metropolisSeq(pattern.genome) : null;
+    family === "compute"
+      ? computeRiff(pattern.genome)
+      : family === "metropolis"
+        ? metropolisSeq(pattern.genome)
+        : pattern.style === "d"
+          ? styleRiff(pattern.blueprintId, pattern.styleGenome!)
+          : null;
   const motifBass =
     family === "compute"
       ? { cells: computeBass(pattern.genome), gateBeats: null }
@@ -1706,7 +1776,12 @@ async function buildRig(
             const b = metropolisBass(pattern.genome);
             return { cells: b.cells, gateBeats: b.gateBeats };
           })()
-        : null;
+        : pattern.style === "d"
+          ? (() => {
+              const b = styleBass(pattern.blueprintId, pattern.styleGenome!, pattern.scale);
+              return { cells: b.cells[0], gateBeats: b.gate };
+            })()
+          : null;
   // "calls" 큐: 기본 compute + k 스타일(codeRead 섹션, metropolisK는 pulseIntro/breakdown도)만
   // 쓴다(§16.4, kraftwerkK.ts). 언어는 게놈 밖 — 곡 정체성과 무관하다.
   const voiceLang: VoiceLang = pattern.seedHash % 2 === 0 ? "de" : "en";
@@ -1750,6 +1825,14 @@ async function buildRig(
   // 쓰므로 이미 정해진 스테레오 폭을 안 건드린다(styleMaps가 없을 때만 이 분기가 산다).
   const panScale = styleMaps ? 0.15 : 1;
 
+  // §7.2 tape/house/garage 킷(단계 6). 게놈 kit이 결정론적으로 프리셋을 고른다 — 실제
+  // 샘플 파일은 아직 없어서(§8) 항상 합성 대체만 쓴다.
+  const styleFamily =
+    blueprint.kitFamily === "tape" || blueprint.kitFamily === "house" || blueprint.kitFamily === "garage"
+      ? blueprint.kitFamily
+      : null;
+  const styleKit = styleFamily ? await loadStyleKit(ctx.sampleRate, styleFamily, pattern.styleGenome?.kit ?? 0) : null;
+
   const rig: Rig = {
     ctx,
     mix,
@@ -1758,7 +1841,7 @@ async function buildRig(
       bass: createVoice(ctx, strips.bass, pattern.bassVoice, noise, duration, 0.6, tapeWobble),
       lead: createVoice(ctx, strips.lead, pattern.leadVoice, noise, duration, 0.25, tapeWobble),
       arp: createVoice(ctx, strips.arp, "square", noise, duration, 0.45, tapeWobble),
-      seqRiff: createVoice(ctx, strips.seqRiff, "triSub", noise, duration, 0.4, tapeWobble),
+      seqRiff: createVoice(ctx, strips.seqRiff, pattern.style === "d" ? "cheapSynth" : "triSub", noise, duration, 0.4, tapeWobble),
       seqRun: createVoice(ctx, strips.seqRun, "sawUnison", noise, duration, 0.35, tapeWobble),
     },
     stabVoices: [0, 1, 2].map(() => createVoice(ctx, strips.stab, "sawUnison", noise, duration, 0.4, tapeWobble)),
@@ -1779,7 +1862,7 @@ async function buildRig(
     tonalBuffer,
     blueprint,
     styleMaps,
-    styleKit: null,
+    styleKit,
     sub808Kit: null,
     bassSidechain,
   };
@@ -1794,6 +1877,23 @@ export async function renderArrangement(pattern: Pattern, options: RenderOptions
   // 리버브/딜레이 꼬리가 잘리지 않게 뒤에 여유를 둔다.
   const duration = arrangement.totalSeconds + 3;
   const { ctx, rig } = await buildRig(pattern, options, duration);
+
+  // §6.5 item 2 / §4.1 D10: 로파이 블루프린트는 섹션과 무관하게 테이프 히스가 곡 내내 깔린다.
+  // 사이드체인 버스를 안 거치고 master로 바로 가서 킥에 안 눌린다.
+  if (rig.blueprint.lofi) {
+    const tape = pattern.styleGenome?.tape ?? 0;
+    const lowpassStage = Math.floor(tape / 4) % 4; // 0=가장 어두움(1.5kHz)
+    const hissDb = -44 + (3 - lowpassStage); // 어두울수록 히스가 두드러진다(표의 "+4dB" 근사)
+    const hiss = ctx.createBufferSource();
+    hiss.buffer = makePinkNoiseBuffer(ctx, (pattern.seedHash ^ 0x715510e) >>> 0, 3);
+    hiss.loop = true;
+    const hissGain = ctx.createGain();
+    hissGain.gain.value = 10 ** (hissDb / 20);
+    hiss.connect(hissGain);
+    hissGain.connect(rig.mix.master);
+    hiss.start(0);
+    hiss.stop(duration);
+  }
 
   for (const section of arrangement.sections) {
     const start = section.startBar * arrangement.barSeconds;

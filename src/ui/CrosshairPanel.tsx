@@ -111,7 +111,9 @@ export function CrosshairPanel({ pattern, control, onChange }: Props) {
       </div>
 
       <p className="device-subheading">
-        TEMPO {Math.round(MIN_TEMPO + pos.x * (MAX_TEMPO - MIN_TEMPO))} BPM / TONE{" "}
+        {/* §6.6: 슬라이더 자체는 104~132 그대로 두고(인코딩 불변, R10), 화면 표시만 실제
+            BPM(× tempoScale)으로 보여준다 — 예: halfStep에서 116 위치 → "87 BPM". */}
+        TEMPO {Math.round((MIN_TEMPO + pos.x * (MAX_TEMPO - MIN_TEMPO)) * pattern.tempoScale)} BPM / TONE{" "}
         {Math.round(pos.y * 100)}%
       </p>
 

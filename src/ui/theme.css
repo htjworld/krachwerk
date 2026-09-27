@@ -344,7 +344,7 @@ button {
 
 .matrix-grid {
   display: grid;
-  grid-template-columns: repeat(16, 1fr);
+  grid-template-columns: repeat(var(--steps, 16), 1fr);
   gap: 3px;
   margin: 12px 0;
 }
@@ -369,7 +369,7 @@ button {
 
 .matrix-step-labels {
   display: grid;
-  grid-template-columns: repeat(16, 1fr);
+  grid-template-columns: repeat(var(--steps, 16), 1fr);
   font-size: 0.6em;
   color: var(--fg-device-dim);
   margin-top: -6px;
