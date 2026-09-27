@@ -20,6 +20,9 @@ export interface Player {
   /** 렌더링이 실패했을 때의 사유. 조용히 무음이 되는 것보다 화면에 띄우는 게 낫다. */
   error: string | null;
   toggle: () => void;
+  /** 재생바를 잡는 순간 부른다. 재생 상태는 그대로 두고 소리만 멈춘다 — 끄는 동안 seek를
+   *  계속 부르면 소스를 매번 새로 걸어서 지지직 소리가 난다. 다음 seek가 그 자리부터 다시 튼다. */
+  hold: () => void;
   seek: (seconds: number) => void;
   getPosition: () => number;
 }
@@ -73,6 +76,7 @@ export function usePlayer(
   const startedAtRef = useRef(0);
   const offsetRef = useRef(0);
   const runRef = useRef(0);
+  const holdRef = useRef(false);
   const [buffer, setBuffer] = useState<AudioBuffer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRendering, setIsRendering] = useState(true);
@@ -187,12 +191,13 @@ export function usePlayer(
   // 일시정지/탐색 때만 갱신되므로, 재생 중 프리뷰 버퍼가 계속 바뀌는 동안(진행률 갱신마다)
   // 그대로 쓰면 매번 마지막으로 멈췄던 지점(보통 0)으로 되감겨 버린다.
   useEffect(() => {
-    if (!isPlaying || !buffer) return;
+    if (!isPlaying || !buffer || holdRef.current) return;
     if (playingBufferRef.current === buffer && sourceRef.current) return;
     startFrom(getPosition());
   }, [buffer, isPlaying, startFrom, getPosition]);
 
   const toggle = useCallback(() => {
+    holdRef.current = false;
     if (isPlaying) {
       offsetRef.current = getPosition();
       stopSource();
@@ -210,8 +215,16 @@ export function usePlayer(
     startFrom(offsetRef.current);
   }, [isPlaying, getPosition, startFrom, stopSource]);
 
+  const hold = useCallback(() => {
+    if (holdRef.current) return;
+    if (isPlaying) offsetRef.current = getPosition();
+    holdRef.current = true;
+    stopSource();
+  }, [isPlaying, getPosition, stopSource]);
+
   const seek = useCallback(
     (seconds: number) => {
+      holdRef.current = false;
       offsetRef.current = Math.max(0, seconds);
       if (isPlaying) startFrom(offsetRef.current);
     },
@@ -227,6 +240,7 @@ export function usePlayer(
     duration: buffer?.duration ?? 0,
     error,
     toggle,
+    hold,
     seek,
     getPosition,
   };

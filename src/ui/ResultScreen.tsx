@@ -55,6 +55,10 @@ function styleLabel(pattern: Pattern, t: (path: string) => string): string {
 function TrackProgress({ player, pattern, tempo }: { player: Player; pattern: Pattern; tempo: number }) {
   const { t } = useI18n();
   const [position, setPosition] = useState(0);
+  // 끄는 중인 위치. 끄는 동안은 소리를 멈추고(player.hold) 표시만 따라가다가, 손을 떼는 순간
+  // 그 자리로 한 번만 seek한다. 키보드 조작은 끌기가 아니라서 바로 seek한다.
+  const [dragValue, setDragValue] = useState<number | null>(null);
+  const dragRef = useRef<number | null>(null);
   // player는 렌더마다 새 객체라 이펙트 의존성에 넣으면 rAF가 매 프레임 재등록된다.
   const playerRef = useRef(player);
   playerRef.current = player;
@@ -72,7 +76,7 @@ function TrackProgress({ player, pattern, tempo }: { player: Player; pattern: Pa
 
   const arrangement = arrangementFor(pattern, tempo);
   const total = arrangement.totalSeconds;
-  const clamped = Math.min(position, total);
+  const clamped = Math.min(dragValue ?? position, total);
   const ratio = total > 0 ? clamped / total : 0;
 
   // 아직 렌더가 안 끝났으면 지금까지 나온 앞부분만큼만 재생/이동할 수 있다(비디오 버퍼링 바와 같은 개념).
@@ -98,8 +102,31 @@ function TrackProgress({ player, pattern, tempo }: { player: Player; pattern: Pa
           step={0.25}
           value={clamped}
           aria-label={t("resultScreen.seek")}
+          onPointerDown={(event) => {
+            player.hold();
+            dragRef.current = Number(event.currentTarget.value);
+            setDragValue(dragRef.current);
+            // 바 밖에서 손을 떼도 끝나도록 window에서 받는다.
+            const release = () => {
+              window.removeEventListener("pointerup", release);
+              window.removeEventListener("pointercancel", release);
+              const seconds = dragRef.current;
+              dragRef.current = null;
+              setDragValue(null);
+              if (seconds === null) return;
+              setPosition(seconds);
+              player.seek(seconds);
+            };
+            window.addEventListener("pointerup", release);
+            window.addEventListener("pointercancel", release);
+          }}
           onChange={(event) => {
             const seconds = Number(event.target.value);
+            if (dragRef.current !== null) {
+              dragRef.current = seconds;
+              setDragValue(seconds);
+              return;
+            }
             setPosition(seconds);
             player.seek(seconds);
           }}
