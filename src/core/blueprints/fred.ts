@@ -2,12 +2,15 @@
 // 반영한 것: 목소리 조각(chop)이 곡의 중심(거의 모든 섹션에 있다), 사이드체인이 크다,
 // 드롭아웃·전환이 잦다, switchUp의 sub808 킷 전환.
 //
-// ponytail(단순화):
-// - form 안의 구조 변형(voiceStop 유무 등)은 아직 안 만든다 — 표의 기본 구조 하나로 고정.
-// - "chord" 레이어는 p와 같은 이유로 기존 pad 레이어(schedulePad)를 그대로 재사용한다.
+// 창의성 감사(2026-09-27) 후: form 안 구조 변형(voiceStop 유무 등)을 applyFFormVariant로
+// 적용한다 — switchUp은 스펙대로 이 비트와 무관하다("비트1과 무관하게 전환이 항상 있다").
+//
+// ponytail(단순화, 여전히 남아 있음):
+// - chord 레이어는 실제 진행(§7.4)을 stabVoices로 재생한다(styleMotifs.ts fChordRootAt) —
+//   pad 재사용은 아니다(창의성 감사에서 고쳤다, k 음색이 섞이던 문제).
 // - switchUp의 "sub" 전용 레이어는 따로 안 만든다 — kitSwap: "sub808"이 kick 큐의 킷 자체를
 //   바꿔서 같은 효과를 낸다(styleMotifs.ts switchUpMaps 위 comment).
-import type { Blueprint, LayerCue, LayerId } from "../blueprint";
+import type { Blueprint, BlueprintSection, LayerCue, LayerId } from "../blueprint";
 
 function cue(layer: LayerId, extra: Partial<LayerCue> = {}): LayerCue {
   return { layer, enterBar: 0, exitBarsBeforeEnd: 0, rateSteps: [{ atBar: 0, rate: 16, density: 255 }], ...extra };
@@ -103,6 +106,7 @@ export const garageShuffle: Blueprint = {
       intensity: 0.4,
       drumFamily: "none",
       fill: [],
+      chordBreak: true,
       filter: { from: 5000, to: 5000 },
       cues: [cue("chord"), cue("chop")],
     },
@@ -353,8 +357,43 @@ export const switchUp: Blueprint = {
 
 export const FRED_BLUEPRINTS: readonly Blueprint[] = [garageShuffle, halfStep, switchUp];
 
-/** f 스타일 form(기수 12) → 블루프린트. ⌊v/4⌋가 3종을 고른다(§6.3 "form 필드 해석") — 각
- *  블루프린트 안의 구조 변형(비트 나머지)은 아직 안 쓴다(파일 위 comment 참고). */
+/** f 스타일 form(기수 12) → 블루프린트. ⌊v/4⌋가 3종을 고른다(§6.3 "form 필드 해석"). */
 export function fBlueprintIdFor(form: number): "garageShuffle" | "halfStep" | "switchUp" {
   return (["garageShuffle", "halfStep", "switchUp"] as const)[Math.floor(form / 4) % 3];
+}
+
+/**
+ * form 안 구조 변형(§6.3, v%4): garageShuffle — 비트0 voiceStop 유무, 비트1 끝(비트전환 뒤
+ * 아웃트로/목소리만으로 끝). halfStep — 같은 비트 자리를 빌려 dropOut3·strip 섹션 유무로
+ * 비슷한 "덜어내기" 변화를 준다(halfStep 표에는 garageShuffle만큼 명시적인 토글이 없다).
+ * switchUp — 스펙대로 이 비트와 무관하다("비트1과 무관하게 전환이 항상 있다").
+ */
+export function applyFFormVariant(blueprint: Blueprint, form: number): Blueprint {
+  const v = form % 4;
+  if (blueprint.id === "garageShuffle") {
+    let sections: BlueprintSection[] = [...blueprint.sections];
+    if ((v & 1) === 0) sections = sections.filter((s) => s.id !== "voiceStop");
+    if (((v >> 1) & 1) === 0) {
+      const endIdx = sections.length - 1;
+      const before = sections.filter((s) => s.id !== "switch" && s.id !== "outro" && s !== sections[endIdx]);
+      const voiceOnly: BlueprintSection = {
+        id: "voiceOnly",
+        bars: 4,
+        intensity: 0.3,
+        drumFamily: "none",
+        fill: [],
+        filter: { from: 5000, to: 5000 },
+        cues: [cue("chop")],
+      };
+      sections = [...before, voiceOnly, sections[endIdx]];
+    }
+    return { ...blueprint, sections };
+  }
+  if (blueprint.id === "halfStep") {
+    let sections: BlueprintSection[] = [...blueprint.sections];
+    if ((v & 1) === 0) sections = sections.filter((s) => s.id !== "dropOut3");
+    if (((v >> 1) & 1) === 0) sections = sections.filter((s) => s.id !== "strip");
+    return { ...blueprint, sections };
+  }
+  return blueprint;
 }

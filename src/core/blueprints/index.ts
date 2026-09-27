@@ -2,11 +2,12 @@
 // blueprintById를 그대로 쓰고, 스타일별 블루프린트는 여기서 늘려간다(§11 단계 8~10에서
 // delroy.ts/peggy.ts/fred.ts가 채워진다).
 import type { Blueprint, BlueprintId } from "../blueprint";
+import type { Pattern } from "../pattern";
 import { blueprintById, type OpenBlueprintId } from "./legacy";
 import { computeK, metropolisK } from "./kraftwerkK";
-import { beachDemo, dBlueprintIdFor, fourFloorJam, shuffle12, tapeJam } from "./delroy";
-import { clubHouse, pBlueprintIdFor, slowJam } from "./peggy";
-import { fBlueprintIdFor, garageShuffle, halfStep, switchUp } from "./fred";
+import { applyDIntroVariant, beachDemo, dBlueprintIdFor, fourFloorJam, shuffle12, tapeJam } from "./delroy";
+import { applyPFormVariant, clubHouse, pBlueprintIdFor, slowJam } from "./peggy";
+import { applyFFormVariant, fBlueprintIdFor, garageShuffle, halfStep, switchUp } from "./fred";
 
 export { dBlueprintIdFor, pBlueprintIdFor, fBlueprintIdFor };
 
@@ -52,5 +53,23 @@ export function blueprintFor(id: BlueprintId): Blueprint {
       return switchUp;
     default:
       throw new Error(`blueprintFor: 아직 구현되지 않은 블루프린트 id "${id}"`);
+  }
+}
+
+/** blueprintFor(id) 결과에 style genome의 남은 form 비트로 구조 변형을 적용한다(창의성
+ *  감사, 2026-09-27). open/k는 R9(고정 스냅샷) 때문에 절대 건드리지 않고 그대로 통과시킨다. */
+export function resolvedBlueprintFor(pattern: Pattern): Blueprint {
+  const blueprint = blueprintFor(pattern.blueprintId);
+  if (!pattern.styleGenome) return blueprint;
+  const form = pattern.styleGenome.form ?? 0;
+  switch (pattern.styleGenome.style) {
+    case "d":
+      return applyDIntroVariant(blueprint, form);
+    case "p":
+      return applyPFormVariant(blueprint, form);
+    case "f":
+      return applyFFormVariant(blueprint, form);
+    default:
+      return blueprint;
   }
 }

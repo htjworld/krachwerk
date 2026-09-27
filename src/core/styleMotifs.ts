@@ -29,6 +29,12 @@ export function dScale(g: StyleGenome): Scale {
   return makeScale(g.key ?? 0, mode.intervals, mode.name);
 }
 
+/** d `chord`(§7.1 cheapSynth, tapeJam intro의 "chord(신스)")가 잡을 코드 뿌리 — §4.1 D12
+ *  "화성은 한 코드 고정"이 d의 정체성이라 늘 으뜸음 하나다(진행 자체가 없다). */
+export function dChordRootAt(_barIndex: number): number {
+  return 0;
+}
+
 function uniformVelocity(v: number, n: number): number[] {
   return Array(n).fill(v);
 }
@@ -447,7 +453,12 @@ function styleBassFor(
 // 더한다.
 const P_CLUBHOUSE_BASS_RHYTHM = [[0, 3, 6, 8, 11, 14], [0, 3, 6, 10, 12], [0, 2, 6, 8, 10, 14], [0, 3, 6, 8, 11, 14]];
 const P_SLOWJAM_BASS_RHYTHM = [[1, 3, 6, 9, 11, 14], [2, 6, 10, 14], [3, 7, 11, 15], [1, 6, 9, 14]];
-const P_BASS_OCTAVE = [[], [], [], []];
+// ponytail 창의성 감사 후 추가: 원래 여기가 비어 있어서 bassShape 비트4-5(옥타브 점프,
+// 4가지)가 p에서 통째로 죽어 있었다 — 실측표엔 없는 값이지만(원곡 그대로 베끼지 않는다는
+// 원칙, R2와도 맞는다) 리듬에 실제로 들어 있는 스텝 위에 옥타브 점프를 얹어서 게놈 비트가
+// 진짜 다른 곡을 만들게 한다.
+const P_CLUBHOUSE_BASS_OCTAVE = [[], [14], [8], [8, 14]];
+const P_SLOWJAM_BASS_OCTAVE = [[], [14], [9], [9, 14]];
 
 // f(§7.5): 리듬 4종 그대로, 마지막 히트에 옥타브 점프(d의 인접 디그리 근사와 같은 절충).
 const F_BASS_RHYTHM = [[0, 7, 8, 10, 11], [0, 3, 8, 11], [2, 6, 10, 14], [0]];
@@ -456,8 +467,8 @@ const F_BASS_OCTAVE = [[], [11], [14], [0]];
 export function styleBass(id: BlueprintId, g: StyleGenome, scale: Scale): { cells: StepCell[][]; gate: number } {
   const octaveLen = scale.intervals.length;
   if (id === "shuffle12") return styleBassFor(D12_BASS_RHYTHM, D12_BASS_OCTAVE, 12, g, octaveLen);
-  if (id === "clubHouse") return styleBassFor(P_CLUBHOUSE_BASS_RHYTHM, P_BASS_OCTAVE, 16, g, octaveLen);
-  if (id === "slowJam") return styleBassFor(P_SLOWJAM_BASS_RHYTHM, P_BASS_OCTAVE, 16, g, octaveLen);
+  if (id === "clubHouse") return styleBassFor(P_CLUBHOUSE_BASS_RHYTHM, P_CLUBHOUSE_BASS_OCTAVE, 16, g, octaveLen);
+  if (id === "slowJam") return styleBassFor(P_SLOWJAM_BASS_RHYTHM, P_SLOWJAM_BASS_OCTAVE, 16, g, octaveLen);
   if (id === "garageShuffle" || id === "halfStep" || id === "switchUp") {
     return styleBassFor(F_BASS_RHYTHM, F_BASS_OCTAVE, 16, g, octaveLen);
   }
@@ -525,19 +536,20 @@ const P_MODES: Record<"aeolian" | "dorian" | "ionian", readonly number[]> = {
 interface PProgDef {
   mode: keyof typeof P_MODES;
   main: readonly { degree: number; bars: number }[];
+  /** §7.4 "브레이크" 열 — halfBeat/break 등 chordBreak 섹션에서만 잡는 진행. */
+  brk: readonly { degree: number; bars: number }[];
 }
 
-// §7.4 표. 브레이크 코드(halfBeat 등)는 아직 실제로 재생하는 곳이 없어서(위 ponytail 메모)
-// 뺐다 — main 진행의 뿌리 자리만 남긴다.
 const P_PROG: readonly PProgDef[] = [
-  { mode: "aeolian", main: [{ degree: 0, bars: 1 }] },
-  { mode: "aeolian", main: [{ degree: 0, bars: 1 }] },
+  { mode: "aeolian", main: [{ degree: 0, bars: 1 }], brk: [{ degree: 2, bars: 2 }, { degree: 3, bars: 2 }] },
+  { mode: "aeolian", main: [{ degree: 0, bars: 1 }], brk: [{ degree: 5, bars: 2 }, { degree: 6, bars: 2 }] },
   {
     mode: "aeolian",
     main: [
       { degree: 0, bars: 2 },
       { degree: 5, bars: 2 },
     ],
+    brk: [{ degree: 5, bars: 1 }],
   },
   {
     mode: "aeolian",
@@ -545,6 +557,7 @@ const P_PROG: readonly PProgDef[] = [
       { degree: 0, bars: 2 },
       { degree: 6, bars: 2 },
     ],
+    brk: [{ degree: 6, bars: 1 }],
   },
   {
     mode: "aeolian",
@@ -552,6 +565,7 @@ const P_PROG: readonly PProgDef[] = [
       { degree: 0, bars: 2 },
       { degree: 3, bars: 2 },
     ],
+    brk: [{ degree: 3, bars: 1 }],
   },
   {
     mode: "aeolian",
@@ -561,6 +575,7 @@ const P_PROG: readonly PProgDef[] = [
       { degree: 2, bars: 1 },
       { degree: 6, bars: 1 },
     ],
+    brk: [{ degree: 5, bars: 1 }],
   },
   {
     mode: "dorian",
@@ -568,6 +583,7 @@ const P_PROG: readonly PProgDef[] = [
       { degree: 0, bars: 2 },
       { degree: 3, bars: 2 },
     ],
+    brk: [{ degree: 3, bars: 1 }],
   },
   {
     mode: "ionian",
@@ -575,6 +591,7 @@ const P_PROG: readonly PProgDef[] = [
       { degree: 0, bars: 2 },
       { degree: 3, bars: 2 },
     ],
+    brk: [{ degree: 5, bars: 1 }],
   },
 ];
 
@@ -609,9 +626,11 @@ function progressionRootAt(main: readonly { degree: number; bars: number }[], ba
   return main[main.length - 1].degree;
 }
 
-/** p `chord`(§7.1 fmEPiano/superPad, halfBeat·break·chorus 등)가 이 마디에 잡을 코드 뿌리. */
-export function pChordRootAt(g: StyleGenome, barIndex: number): number {
-  return progressionRootAt(pProgDef(g).main, barIndex);
+/** p `chord`(§7.1 fmEPiano/superPad)가 이 마디에 잡을 코드 뿌리. isBreak면 진행을 순환하지
+ *  않고 §7.4 "브레이크" 열(halfBeat·break 전용 코드)을 대신 순환한다. */
+export function pChordRootAt(g: StyleGenome, barIndex: number, isBreak = false): number {
+  const def = pProgDef(g);
+  return progressionRootAt(isBreak ? def.brk : def.main, barIndex);
 }
 
 // ---------------------------------------------------------------- p: 찬트 후크 (§7.7)
@@ -677,10 +696,10 @@ const F_MODES: Record<"ionian" | "aeolian" | "mixolydian", readonly number[]> = 
 interface FProgDef {
   mode: keyof typeof F_MODES;
   main: readonly { degree: number; bars: number }[];
+  /** §7.4 "브레이크" 열 — breakdown 등 chordBreak 섹션에서만 잡는 진행. */
+  brk: readonly { degree: number; bars: number }[];
 }
 
-// §7.4 f 열. break 코드는 p와 같은 이유(§9절 ponytail)로 뺐다 — chord는 pad 재사용이라
-// 브레이크 전용 코드를 따로 재생하는 곳이 없다.
 const F_PROG: readonly FProgDef[] = [
   {
     mode: "ionian",
@@ -688,6 +707,7 @@ const F_PROG: readonly FProgDef[] = [
       { degree: 0, bars: 2 },
       { degree: 2, bars: 2 },
     ],
+    brk: [{ degree: 4, bars: 1 }],
   },
   {
     mode: "ionian",
@@ -697,6 +717,7 @@ const F_PROG: readonly FProgDef[] = [
       { degree: 0, bars: 2 },
       { degree: 2, bars: 2 },
     ],
+    brk: [{ degree: 3, bars: 1 }],
   },
   {
     mode: "ionian",
@@ -706,6 +727,7 @@ const F_PROG: readonly FProgDef[] = [
       { degree: 0, bars: 2 },
       { degree: 4, bars: 2 },
     ],
+    brk: [{ degree: 3, bars: 1 }],
   },
   {
     mode: "ionian",
@@ -715,6 +737,7 @@ const F_PROG: readonly FProgDef[] = [
       { degree: 5, bars: 2 },
       { degree: 3, bars: 2 },
     ],
+    brk: [{ degree: 5, bars: 1 }],
   },
   {
     mode: "aeolian",
@@ -724,6 +747,7 @@ const F_PROG: readonly FProgDef[] = [
       { degree: 2, bars: 2 },
       { degree: 6, bars: 2 },
     ],
+    brk: [{ degree: 5, bars: 1 }],
   },
   {
     mode: "ionian",
@@ -731,6 +755,7 @@ const F_PROG: readonly FProgDef[] = [
       { degree: 3, bars: 2 },
       { degree: 0, bars: 2 },
     ],
+    brk: [{ degree: 3, bars: 1 }],
   },
   {
     mode: "aeolian",
@@ -738,8 +763,9 @@ const F_PROG: readonly FProgDef[] = [
       { degree: 0, bars: 2 },
       { degree: 3, bars: 2 },
     ],
+    brk: [{ degree: 3, bars: 1 }],
   },
-  { mode: "mixolydian", main: [{ degree: 0, bars: 1 }] },
+  { mode: "mixolydian", main: [{ degree: 0, bars: 1 }], brk: [{ degree: 3, bars: 1 }] },
 ];
 
 function fProgDef(g: StyleGenome): FProgDef {
@@ -751,9 +777,11 @@ export function fScale(g: StyleGenome): Scale {
   return makeScale(g.key ?? 0, F_MODES[def.mode], def.mode);
 }
 
-/** f `chord`(§7.1 superPad)가 이 마디에 잡을 코드 뿌리. */
-export function fChordRootAt(g: StyleGenome, barIndex: number): number {
-  return progressionRootAt(fProgDef(g).main, barIndex);
+/** f `chord`(§7.1 superPad)가 이 마디에 잡을 코드 뿌리. isBreak면 §7.4 "브레이크" 열을
+ *  대신 순환한다(breakdown 등). */
+export function fChordRootAt(g: StyleGenome, barIndex: number, isBreak = false): number {
+  const def = fProgDef(g);
+  return progressionRootAt(isBreak ? def.brk : def.main, barIndex);
 }
 
 // ---------------------------------------------------------------- f: 목소리 조각(chop) (§6.4.1/§7.7)

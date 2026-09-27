@@ -21,11 +21,12 @@ import {
   type LayerCue,
   type LayerId,
 } from "./blueprint";
-import { blueprintFor } from "./blueprints";
+import { resolvedBlueprintFor } from "./blueprints";
 import { legacyCue } from "./blueprints/legacy";
 import { targetSecondsFor, targetSecondsForStyle } from "./genome";
 import {
   chopPlan,
+  dChordRootAt,
   fChordRootAt,
   hookPlan,
   pChordRootAt,
@@ -76,7 +77,7 @@ function targetSecondsForPattern(pattern: Pattern): number {
 /** tempo는 실제 BPM이어야 한다(§6.6) — 크로스헤어 단위 그대로 넘기면 tempoScale이 있는
  *  블루프린트에서 길이·타이밍이 어긋난다. 호출부는 effectiveTempo(pattern, control)를 쓴다. */
 export function arrangementFor(pattern: Pattern, tempo: number): Arrangement {
-  return buildArrangement(blueprintFor(pattern.blueprintId), tempo, targetSecondsForPattern(pattern));
+  return buildArrangement(resolvedBlueprintFor(pattern), tempo, targetSecondsForPattern(pattern));
 }
 
 export const DEFAULT_SAMPLE_RATE = 44100;
@@ -1192,7 +1193,7 @@ export interface Rig {
   chopPool: readonly AudioBuffer[];
   /** 260927 §7.1/§7.4 신규. p·f `chord` 레이어가 이 마디에 잡을 코드 뿌리(스케일 디그리).
    *  p/f가 아니면 null. */
-  chordRootAt: ((barIndex: number) => number) | null;
+  chordRootAt: ((barIndex: number, isBreak?: boolean) => number) | null;
 }
 
 export function scheduleBar(
@@ -1679,15 +1680,25 @@ function scheduleStyleBar(
     }
   }
 
-  // p·f `chord`(§7.1 fmEPiano/superPad): stabVoices 3개로 코드 3음(근음·3도·5도)을 맡는다.
-  // 코드가 바뀌는 마디(또는 섹션에 새로 들어오는 마디)에서만 다시 친다 — 매 마디 다시
-  // 치면 지속되는 코드가 아니라 스타카토처럼 들린다.
+  // d·p·f `chord`(§7.1 cheapSynth/fmEPiano/superPad): stabVoices 3개로 코드 3음(근음·3도·
+  // 5도)을 맡는다. 코드가 바뀌는 마디(또는 섹션에 새로 들어오는 마디)에서만 다시 친다 —
+  // 매 마디 다시 치면 지속되는 코드가 아니라 스타카토처럼 들린다. chordBreak 섹션(halfBeat·
+  // breakdown 등, §7.4 "브레이크" 열)은 진행을 순환하지 않고 그 섹션 전용 코드를 잡는다.
   if (rig.chordRootAt) {
     const chordCue = cueFor(section, "chord", sectionBar);
     if (chordCue && !chordCue.skipBars?.includes(sectionBar)) {
-      const root = rig.chordRootAt(barIndex);
-      const changed = sectionBar === 0 || root !== rig.chordRootAt(barIndex - 1);
-      if (changed) {
+      const isBreak = section.chordBreak ?? false;
+      const root = rig.chordRootAt(barIndex, isBreak);
+      const changed = sectionBar === 0 || root !== rig.chordRootAt(barIndex - 1, isBreak);
+      // f(superPad, 곡 내내 배경)·p slowJam(fmEPiano, §7.1 "스탭")은 코드가 하나로 오래
+      // 붙어 있는 구간에서도 이따금 다시 숨쉰다 — riffRhythm(12비트)으로 몇 마디에 한 번인지
+      // 정한다(창의성 감사 후 추가: 이 필드가 f에서 완전히 안 쓰이고 있었다).
+      const breathPeriod = 2 + ((pattern.styleGenome?.riffRhythm ?? 0) % 6);
+      const breathes =
+        !changed &&
+        (pattern.style === "f" || pattern.blueprintId === "slowJam") &&
+        barIndex % breathPeriod === 0;
+      if (changed || breathes) {
         [root, root + 2, root + 4].forEach((degree, i) => {
           const freq = midiToFrequency(degreeToMidi(pattern.scale, degree));
           rig.stabVoices[i].note(atSynth(0), freq, rig.stepDur * 8, 0.4);
@@ -1819,7 +1830,7 @@ async function buildRig(
   const ctx = new OfflineAudioContext(2, totalSamples, sampleRate);
   if (onProgress) attachProgress(ctx, duration, onProgress);
 
-  const blueprint = blueprintFor(pattern.blueprintId);
+  const blueprint = resolvedBlueprintFor(pattern);
   const track = deriveTrack(pattern);
   const bank = await loadSampleBank(ctx, track.kit);
   const mix = buildMix(
@@ -1951,13 +1962,15 @@ async function buildRig(
   // 아직 소싱 전이고, 로봇 목소리는 일부러 폴백에서 뺐다(위 comment) — 비어 있으면
   // scheduleStyleBar가 formantVox 합성으로 대신한다.
   const chopPool: AudioBuffer[] = userKitBuffersResolved?.voice ? [userKitBuffersResolved.voice] : [];
-  // p·f `chord`(§7.1/§7.4): 이 마디의 코드 뿌리를 돌려주는 함수 하나로 넘긴다.
+  // d·p·f `chord`(§7.1/§7.4): 이 마디의 코드 뿌리를 돌려주는 함수 하나로 넘긴다.
   const chordRootAt =
     pattern.style === "p"
-      ? (barIndex: number) => pChordRootAt(pattern.styleGenome!, barIndex)
+      ? (barIndex: number, isBreak?: boolean) => pChordRootAt(pattern.styleGenome!, barIndex, isBreak)
       : pattern.style === "f"
-        ? (barIndex: number) => fChordRootAt(pattern.styleGenome!, barIndex)
-        : null;
+        ? (barIndex: number, isBreak?: boolean) => fChordRootAt(pattern.styleGenome!, barIndex, isBreak)
+        : pattern.style === "d"
+          ? dChordRootAt
+          : null;
 
   const rig: Rig = {
     ctx,
@@ -1980,18 +1993,20 @@ async function buildRig(
       seqRiff: createVoice(ctx, strips.seqRiff, pattern.style === "d" ? "cheapSynth" : "triSub", noise, duration, 0.4, tapeWobble),
       seqRun: createVoice(ctx, strips.seqRun, "sawUnison", noise, duration, 0.35, tapeWobble),
     },
-    // p·f의 chord(§7.1): clubHouse의 브레이크·halfBeat는 superPad, slowJam은 fmEPiano, f는
-    // 곡 전체에서 계속 나오는 배경이라 superPad. open/k/d는 여태처럼 sawUnison(stab 원래
-    // 용도, compute 계열 화음 채우기).
+    // d·p·f의 chord(§7.1): d는 cheapSynth(bass/lead/seqRiff와 같은 집안 음색). clubHouse의
+    // 브레이크·halfBeat와 f는 곡 내내 배경이라 superPad, slowJam은 fmEPiano. open/k는
+    // 여태처럼 sawUnison(stab 원래 용도, compute 계열 화음 채우기).
     stabVoices: [0, 1, 2].map(() =>
       createVoice(
         ctx,
         strips.stab,
-        pattern.style === "f" || (pattern.style === "p" && pattern.blueprintId === "clubHouse")
-          ? "superPad"
-          : pattern.style === "p" && pattern.blueprintId === "slowJam"
-            ? "fmEPiano"
-            : "sawUnison",
+        pattern.style === "d"
+          ? "cheapSynth"
+          : pattern.style === "f" || (pattern.style === "p" && pattern.blueprintId === "clubHouse")
+            ? "superPad"
+            : pattern.style === "p" && pattern.blueprintId === "slowJam"
+              ? "fmEPiano"
+              : "sawUnison",
         noise,
         duration,
         0.4,
@@ -2144,7 +2159,7 @@ export async function renderLoopBuffer(pattern: Pattern, options: RenderOptions 
   const duration = loopDurationSeconds(tempo, pattern.stepsPerBar);
   const { ctx, rig } = await buildRig(pattern, { ...options, onProgress: undefined }, duration);
 
-  const blueprint = blueprintFor(pattern.blueprintId);
+  const blueprint = resolvedBlueprintFor(pattern);
   const previewId = PREVIEW_SECTION_ID[pattern.blueprintId];
   const realSection = previewId ? blueprint.sections.find((s) => s.id === previewId) : undefined;
   const section: Section = realSection ? { ...realSection, startBar: 0 } : PREVIEW_SECTION;

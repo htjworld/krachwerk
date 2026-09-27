@@ -62,7 +62,7 @@ function buildFakeRig(pattern: Pattern) {
     hookPlan: hookPlan(g),
     chopPlan: null,
     chopPool: [],
-    chordRootAt: (barIndex: number) => pChordRootAt(g, barIndex),
+    chordRootAt: (barIndex: number, isBreak?: boolean) => pChordRootAt(g, barIndex, isBreak),
   };
   return { rig, events: log.events };
 }
@@ -165,5 +165,16 @@ describe("§7.7 찬트 후크 표", () => {
         expect(HOOK_RHYTHMS[i]).not.toEqual(HOOK_RHYTHMS[j]);
       }
     }
+  });
+});
+
+describe("§7.4 브레이크 코드 (창의성 감사 후 추가)", () => {
+  it("halfBeat/break 같은 chordBreak 섹션은 진행표의 브레이크 코드를 쓴다 — 최소 한 prog는 main과 다르다", () => {
+    let sawDifference = false;
+    for (let prog = 0; prog < 8; prog++) {
+      const g = { style: "p" as const, prog };
+      if (pChordRootAt(g, 0, false) !== pChordRootAt(g, 0, true)) sawDifference = true;
+    }
+    expect(sawDifference).toBe(true);
   });
 });

@@ -67,7 +67,7 @@ function buildFakeRig(pattern: Pattern, opts: { chopPool?: AudioBuffer[] } = {})
     hookPlan: null,
     chopPlan: chopPlan(g),
     chopPool: opts.chopPool ?? [chopBuffer1, chopBuffer2],
-    chordRootAt: (barIndex: number) => fChordRootAt(g, barIndex),
+    chordRootAt: (barIndex: number, isBreak?: boolean) => fChordRootAt(g, barIndex, isBreak),
   };
   return { rig, events: log.events, sub808 };
 }
@@ -174,5 +174,14 @@ describe("f 스타일 코드 (§11 단계 10)", () => {
       const last = blueprint.sections[blueprint.sections.length - 1];
       expect(last.endFill).toBe("stop");
     }
+  });
+
+  it("breakdown 같은 chordBreak 섹션은 진행표의 브레이크 코드를 쓴다 — 최소 한 prog는 main과 다르다", () => {
+    let sawDifference = false;
+    for (let prog = 0; prog < 8; prog++) {
+      const g = { style: "f" as const, prog };
+      if (fChordRootAt(g, 0, false) !== fChordRootAt(g, 0, true)) sawDifference = true;
+    }
+    expect(sawDifference).toBe(true);
   });
 });

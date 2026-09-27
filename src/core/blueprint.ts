@@ -167,6 +167,9 @@ export interface BlueprintSection {
    * styleDrumMaps가 만든 기본 맵보다 우선한다.
    */
   drumOverride?: Partial<Record<LayerId, number[]>>;
+  /** 260927 신규(창의성 감사 후 추가). 이 섹션의 `chord`는 진행표를 순환하지 않고 진행표의
+   *  고정 브레이크 코드 하나를 잡는다(§7.4 "브레이크" 열 — halfBeat·breakdown 등). */
+  chordBreak?: boolean;
 }
 
 export type BlueprintId =

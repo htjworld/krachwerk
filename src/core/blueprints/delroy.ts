@@ -2,16 +2,16 @@
 // 드럼은 곡 전체에서 한 가지 1마디 루프로 고정(styleDrumMaps가 게놈으로 그 루프를 정한다),
 // 섹션은 순전히 "레이어 뮤트 스크립트"(경계마다 1~2개만 바뀐다), 끝은 항상 cut.
 //
-// ponytail: form%3(인트로 변형 3종, §6.3 "form 필드 해석")은 아직 안 만든다 — ⌊form/3⌋로
-// 블루프린트 4종만 고르고, 각 블루프린트는 자기 표의 기본 인트로 하나로 고정한다(tapeJam=
-// 대사 인트로, fourFloorJam=신스+대사, beachDemo=베이스 먼저, shuffle12=드럼 먼저 — 마침
-// 표에 있는 기본값이 세 변형을 이미 하나씩 대표한다). 인트로가 3갈래로 더 갈라지는 건
-// 나중에 들어보고 필요하면 추가한다.
+// 창의성 감사(2026-09-27) 후: form%3(인트로 변형 3종, §6.3 "form 필드 해석")을 실제로
+// 적용한다 — ⌊form/3⌋가 블루프린트 4종을 고르는 건 그대로고, 나머지 form%3이 인트로를
+// 대사/드럼/베이스 셋 중 하나로 바꾼다(applyDIntroVariant). 그전엔 이 나머지 3가지 값이
+// 무슨 시드를 넣어도 아무 효과가 없었다 — 같은 블루프린트끼리는 다 똑같은 인트로였다는
+// 뜻이라, 게놈 공간의 상당 부분이 죽어 있었다.
 //
 // dialogue 큐는 실제 대사 샘플이 오기 전까지(§8.1) rig.styleKit에 그 슬롯이 없어서 조용히
 // 아무 소리도 안 낸다(scheduleStyleBar의 "샘플 없으면 스킵" 경로) — 파일이 오면 이 블루프린트
 // 데이터를 안 건드리고 바로 소리가 붙는다.
-import type { Blueprint, LayerCue, LayerId } from "../blueprint";
+import type { Blueprint, BlueprintSection, LayerCue, LayerId } from "../blueprint";
 
 function cue(layer: LayerId, extra: Partial<LayerCue> = {}): LayerCue {
   return { layer, enterBar: 0, exitBarsBeforeEnd: 0, rateSteps: [{ atBar: 0, rate: 16, density: 255 }], ...extra };
@@ -388,8 +388,54 @@ export const shuffle12: Blueprint = {
 
 export const DELROY_BLUEPRINTS: readonly Blueprint[] = [tapeJam, fourFloorJam, beachDemo, shuffle12];
 
-/** d 스타일 form(기수 12) → 블루프린트. ⌊v/3⌋가 4종을 고른다(§6.3 "form 필드 해석") — v%3
- *  인트로 변형은 아직 안 쓴다(파일 위 comment 참고). */
+/** d 스타일 form(기수 12) → 블루프린트. ⌊v/3⌋가 4종을 고른다(§6.3 "form 필드 해석"). */
 export function dBlueprintIdFor(form: number): "tapeJam" | "fourFloorJam" | "beachDemo" | "shuffle12" {
   return (["tapeJam", "fourFloorJam", "beachDemo", "shuffle12"] as const)[Math.floor(form / 3) % 4];
+}
+
+function dIntroSection(variant: number, filterFrom: number): BlueprintSection {
+  if (variant === 1) {
+    // 드럼 먼저(4마디, D4 Bixby 모양).
+    return {
+      id: "intro",
+      bars: 4,
+      intensity: 0.6,
+      drumFamily: "none",
+      fill: [],
+      filter: { from: filterFrom, to: filterFrom },
+      cues: [cue("kick"), cue("clap"), cue("hat"), cue("perc")],
+    };
+  }
+  if (variant === 2) {
+    // 베이스 먼저(2마디, D4 Sloane 모양).
+    return {
+      id: "intro",
+      bars: 2,
+      intensity: 0.35,
+      drumFamily: "none",
+      fill: [],
+      filter: { from: filterFrom, to: filterFrom },
+      cues: [cue("bass")],
+    };
+  }
+  // 대사 인트로(드럼 없이 신스+대사, tapeJam 기본형).
+  return {
+    id: "intro",
+    bars: 4,
+    intensity: 0.25,
+    drumFamily: "none",
+    fill: [],
+    filter: { from: filterFrom, to: filterFrom },
+    cues: [cue("chord"), cue("dialogue")],
+  };
+}
+
+/** form%3(인트로 변형 3종, §6.3). tapeJam의 첫 섹션(대사+코드 인트로)만 드럼/베이스
+ *  인트로로 바꿔 끼운다 — fourFloorJam/beachDemo/shuffle12는 이미 서로 다른 고유 인트로가
+ *  있어서 그대로 둔다(안 그러면 이 함수가 그 인트로들을 조용히 지워버린다). */
+export function applyDIntroVariant(blueprint: Blueprint, form: number): Blueprint {
+  if (blueprint.id !== "tapeJam") return blueprint;
+  const variant = form % 3;
+  const filterFrom = blueprint.sections[0]?.filter.from ?? 6000;
+  return { ...blueprint, sections: [dIntroSection(variant, filterFrom), ...blueprint.sections.slice(1)] };
 }

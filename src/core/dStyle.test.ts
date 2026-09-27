@@ -10,7 +10,7 @@ import { mulberry32 } from "./prng";
 import { deriveTrack } from "./track";
 import { resolveLayers } from "./patternOverride";
 import { blueprintFor } from "./blueprints";
-import { styleBass, styleDrumMaps, styleRiff } from "./styleMotifs";
+import { dChordRootAt, styleBass, styleDrumMaps, styleRiff } from "./styleMotifs";
 import { randomStyleCode } from "./seedCode";
 
 function detRand(seed: number): (bytes: Uint8Array) => void {
@@ -62,7 +62,7 @@ function buildFakeRig(pattern: Pattern) {
     hookPlan: null,
     chopPlan: null,
     chopPool: [],
-    chordRootAt: null,
+    chordRootAt: dChordRootAt,
   };
   return { rig, events: log.events };
 }
@@ -105,6 +105,29 @@ describe("d 스타일 코드 (§11 단계 8)", () => {
     expect(target).toBeLessThanOrEqual(180);
     expect(arrangement.totalSeconds).toBeGreaterThan(140);
     expect(arrangement.totalSeconds).toBeLessThan(190);
+  });
+
+  it("tapeJam 인트로가 무음이 아니다", () => {
+    // 회귀 테스트: chordRootAt을 안 넘겼을 때 원래 인트로(대사+코드만, 드럼 없음)가 통째로
+    // 무음이었다. 지금은 form%3으로 대사(코드)/드럼/베이스 3가지 인트로 중 하나가 나오는데,
+    // 어느 쪽이든 인트로 구간에 들리는 이벤트가 있어야 한다 — dialogue는 아직 샘플이 없어서
+    // 원래 조용하지만, 코드/드럼/베이스 중 하나는 소리가 나야 한다.
+    const code = SAMPLE_CODES.find((c) => generatePattern(c).blueprintId === "tapeJam");
+    expect(code).toBeDefined();
+    const pattern = generatePattern(code!);
+    const { events, arrangement } = collectEvents(pattern);
+    const introBars = arrangement.sections[0].bars;
+    const introEnd = introBars * arrangement.barSeconds;
+    const introEvents = events.filter((e) => e.time < introEnd);
+    expect(introEvents.length).toBeGreaterThan(0);
+  });
+
+  it("fourFloorJam 인트로가 무음이 아니다(seqRiff가 실제로 울린다)", () => {
+    const code = SAMPLE_CODES.find((c) => generatePattern(c).blueprintId === "fourFloorJam");
+    expect(code).toBeDefined();
+    const pattern = generatePattern(code!);
+    const { events } = collectEvents(pattern);
+    expect(events.some((e) => e.layer === "seqRiff")).toBe(true);
   });
 
   it("끝은 뚝 끊긴다(§4.1 D6): 마지막 섹션이 endFill cut이다", () => {

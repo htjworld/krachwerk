@@ -2,13 +2,10 @@
 // 반영한 것: P1(두 얼굴 130/102), P2(DJ 인트로), P4(브레이크→halfBeat→build→drop),
 // P6(스윙), P9(베이스 2마디 루프), P12(찬트 후크), P13(신스 폭).
 //
-// ponytail(단순화, 브라우저 청취 후 필요하면 보강):
-// - form%8 안의 구조 변형(두 번째 브레이크 유무·인트로 순서·아웃트로 종류)은 아직 안 만든다
-//   — 표의 기본 순서 하나로 고정.
-// - halfBeat/break의 "브레이크 코드"·chord 레이어는 별도로 안 만들고 기존 pad 레이어(v2부터
-//   있던 schedulePad, renderArrangement가 이미 모든 블루프린트에 대해 처리한다)를 그대로
-//   재사용한다 — 화성적으로는 곡의 대표 코드가 계속 울리는 정도로 근사한다.
-import type { Blueprint, LayerCue, LayerId } from "../blueprint";
+// 창의성 감사(2026-09-27) 후: form 안의 구조 변형(두 번째 브레이크 유무·인트로 순서·아웃트로
+// 종류, clubHouse form&0b111 / slowJam (form-8)&0b11)을 applyPFormVariant로 실제로 적용한다
+// — 그전엔 이 비트들이 죽어 있어서 같은 블루프린트는 항상 같은 순서로만 나왔다.
+import type { Blueprint, BlueprintSection, LayerCue, LayerId } from "../blueprint";
 
 function cue(layer: LayerId, extra: Partial<LayerCue> = {}): LayerCue {
   return { layer, enterBar: 0, exitBarsBeforeEnd: 0, rateSteps: [{ atBar: 0, rate: 16, density: 255 }], ...extra };
@@ -75,6 +72,7 @@ export const clubHouse: Blueprint = {
       intensity: 0.45,
       drumFamily: "none",
       fill: [],
+      chordBreak: true,
       filter: { from: 6000, to: 6000 },
       cues: [cue("seqRiff"), cue("chord")],
     },
@@ -85,6 +83,7 @@ export const clubHouse: Blueprint = {
       drumFamily: "none",
       fill: [],
       drumGainDb: -20,
+      chordBreak: true,
       filter: { from: 6000, to: 6000 },
       cues: [
         cue("kick", { rateSteps: [{ atBar: 0, rate: 4 }] }),
@@ -320,8 +319,42 @@ export const slowJam: Blueprint = {
 
 export const PEGGY_BLUEPRINTS: readonly Blueprint[] = [clubHouse, slowJam];
 
-/** p 스타일 form(기수 12) → 블루프린트. v<8 clubHouse / v≥8 slowJam(§6.3 "form 필드 해석") —
- *  각 블루프린트 안의 구조 변형(비트 나머지)은 아직 안 쓴다(파일 위 comment 참고). */
+/** p 스타일 form(기수 12) → 블루프린트. v<8 clubHouse / v≥8 slowJam(§6.3 "form 필드 해석"). */
 export function pBlueprintIdFor(form: number): "clubHouse" | "slowJam" {
   return form < 8 ? "clubHouse" : "slowJam";
+}
+
+function swapSections(sections: readonly BlueprintSection[], idA: string, idB: string): BlueprintSection[] {
+  const ia = sections.findIndex((s) => s.id === idA);
+  const ib = sections.findIndex((s) => s.id === idB);
+  if (ia < 0 || ib < 0) return [...sections];
+  const copy = [...sections];
+  [copy[ia], copy[ib]] = [copy[ib], copy[ia]];
+  return copy;
+}
+
+/**
+ * form 안 구조 변형(§6.3): clubHouse는 v&0b111 그대로 — 비트0 두 번째 브레이크(break2+
+ * build) 유무, 비트1 synthIn/chant1 순서(신스 먼저/찬트 먼저), 비트2 아웃트로(드럼만/드럼+
+ * seqRiff). slowJam은 (v−8)&0b11 — 비트0 인트로 순서(오르간+건반 먼저/드럼 먼저), 비트1
+ * turn 유무.
+ */
+export function applyPFormVariant(blueprint: Blueprint, form: number): Blueprint {
+  if (blueprint.id === "clubHouse") {
+    let sections: readonly BlueprintSection[] = blueprint.sections;
+    if ((form & 1) === 0) sections = sections.filter((s) => s.id !== "break2" && s.id !== "build");
+    if ((form >> 1) & 1) sections = swapSections(sections, "synthIn", "chant1");
+    if ((form >> 2) & 1) {
+      sections = sections.map((s) => (s.id === "outro" ? { ...s, cues: [...s.cues, cue("seqRiff")] } : s));
+    }
+    return { ...blueprint, sections: [...sections] };
+  }
+  if (blueprint.id === "slowJam") {
+    const v = form - 8;
+    let sections: readonly BlueprintSection[] = blueprint.sections;
+    if (v & 1) sections = swapSections(sections, "intro", "drumsIn");
+    if (((v >> 1) & 1) === 0) sections = sections.filter((s) => s.id !== "turn");
+    return { ...blueprint, sections: [...sections] };
+  }
+  return blueprint;
 }
