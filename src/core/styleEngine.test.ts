@@ -379,3 +379,14 @@ describe("tape 게놈 분해 (§7.3, §6.5 item 2 — 흔들림 4단계 × 로�
     expect(seen.size).toBe(16);
   });
 });
+
+describe("매트릭스 편집값이 d/p/f 드럼 경로에 반영된다", () => {
+  it("override가 있으면 kick 큐는 밀도 맵 대신 편집한 스텝만 친다", () => {
+    const pattern = basePattern();
+    const { rig, log } = buildRig(pattern, { styleMaps: { kick: allOn16 } });
+    const kick = Array.from({ length: 16 }, (_, i) => i === 3 || i === 11);
+    rig.override = { kick, lead: Array(16).fill(false) };
+    scheduleBar(rig, baseSection({ cues: [kickCueAllOn] }), 0, 0, 0, noRng);
+    expect(log.filter((h) => h.role === "kick").map((h) => stepOf(rig, h.time))).toEqual([3, 11]);
+  });
+});

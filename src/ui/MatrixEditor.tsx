@@ -3,7 +3,7 @@ import { useI18n } from "../i18n/i18n";
 import {
   secondsPerStep,
   loopDurationSeconds,
-  resolveLayers,
+  editorLayers,
   overrideFromLayers,
   type Pattern,
   type PatternOverride,
@@ -48,17 +48,20 @@ export function MatrixEditor({ pattern, override, onOverrideChange, onShuffle, o
     return () => cancelAnimationFrame(rafRef.current);
   }, [player, tempo, pattern.stepsPerBar]);
 
-  const resolved = resolveLayers(pattern, override);
+  const resolved = editorLayers(pattern, override);
+  // f는 스텝 멜로디가 없어서(코드 패드와 목소리 조각뿐) MELO 탭을 안 보여준다.
+  const activeTab = resolved.lead ? tab : "drum";
+  const leadOn = resolved.lead?.map((c) => c.on) ?? Array<boolean>(resolved.kick.length).fill(false);
   // 260927 §9.5: PatternOverride.kick은 16비트 인코딩 그대로 두고(§6.2), 매트릭스는
   // stepsPerBar만큼만 그린다 — shuffle12(12칸)에서 안 쓰는 뒤 4칸이 안 보인다.
-  const cells = (tab === "drum" ? resolved.kick : resolved.lead.map((c) => c.on)).slice(0, pattern.stepsPerBar);
+  const cells = (activeTab === "drum" ? resolved.kick : leadOn).slice(0, pattern.stepsPerBar);
 
   const toggleStep = (index: number) => {
     const kick = resolved.kick.slice();
-    const leadOn = resolved.lead.map((c) => c.on);
-    if (tab === "drum") kick[index] = !kick[index];
-    else leadOn[index] = !leadOn[index];
-    onOverrideChange(overrideFromLayers(kick, leadOn));
+    const lead = leadOn.slice();
+    if (activeTab === "drum") kick[index] = !kick[index];
+    else lead[index] = !lead[index];
+    onOverrideChange(overrideFromLayers(kick, lead));
   };
 
   return (
@@ -67,19 +70,21 @@ export function MatrixEditor({ pattern, override, onOverrideChange, onShuffle, o
         <button
           type="button"
           className="device-button"
-          aria-pressed={tab === "drum"}
+          aria-pressed={activeTab === "drum"}
           onClick={() => setTab("drum")}
         >
           {t("matrix.drumTab")}
         </button>
-        <button
-          type="button"
-          className="device-button"
-          aria-pressed={tab === "melo"}
-          onClick={() => setTab("melo")}
-        >
-          {t("matrix.melodyTab")}
-        </button>
+        {resolved.lead && (
+          <button
+            type="button"
+            className="device-button"
+            aria-pressed={activeTab === "melo"}
+            onClick={() => setTab("melo")}
+          >
+            {t("matrix.melodyTab")}
+          </button>
+        )}
       </div>
 
       <div className="matrix-grid" style={{ ["--steps" as string]: pattern.stepsPerBar }}>

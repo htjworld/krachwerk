@@ -1156,6 +1156,9 @@ export interface Rig {
   pattern: Pattern;
   track: Track;
   layers: ResolvedLayers;
+  /** 매트릭스 편집값. 있으면 계열(compute/metropolis, d/p/f)마다 원래 킥 자리를 이걸로 바꾼다.
+   *  legacy는 layers에 이미 덮어써져 있어서 따로 안 본다. 없으면 시드 그대로라 소리가 안 바뀐다. */
+  override?: PatternOverride | null;
   noise: AudioBuffer;
   stepDur: number;
   /** compute/metropolis 전용 조성. legacy는 pattern.scale 그대로다. */
@@ -1292,7 +1295,7 @@ export function scheduleBar(
       // 합성 킷(circuit/skyline, §14.2 K)의 킥 원샷을 세 역할 다 재사용한다 — 역할별
       // 음색은 §11 단계 6 청취 후 다듬는다.
       const sample = rig.synthKit ? rig.synthKit.kick : bank[track.kick];
-      if (familyHit.mask[step]) {
+      if ((rig.override ? rig.override.kick : familyHit.mask)[step]) {
         playHit(familyHit.role, sample, time, 0.9 + 0.1 * intensity);
         if (familyHit.role !== "tick") {
           const depth = 0.34 + 0.24 * (1 - intensity);
@@ -1582,7 +1585,12 @@ function scheduleStyleBar(
 
     for (let step = 0; step < stepsPerBar; step++) {
       if (!cueActiveAtStep(section, cue.layer, sectionBar, step)) continue;
-      const active = override ? override.includes(step) : rateStepActive(effectiveRateStep, step);
+      // 섹션 전용 드럼(필 등)은 그대로 두고, 평소 킥 자리만 매트릭스 편집값으로 바꾼다.
+      const active = override
+        ? override.includes(step)
+        : cue.layer === "kick" && rig.override
+          ? rig.override.kick[step]
+          : rateStepActive(effectiveRateStep, step);
       if (!active) continue;
       const velocity = rateStepVelocity(rateStep, step, map.velocity[step] ?? 0.8);
       const time = at(step);
@@ -1880,14 +1888,17 @@ async function buildRig(
       : family === "metropolis"
         ? metropolisScale(pattern.genome)
         : pattern.scale;
+  // d/p는 lead/seqRiff 둘 다 이 리프를 쳐서, 매트릭스 MELO 편집값을 여기 on/off에 덮는다.
+  // compute/metropolis의 리드는 layers.lead라 리프(seqRiff)는 건드리지 않는다.
+  const riff = pattern.style === "d" || pattern.style === "p" ? styleRiff(pattern.blueprintId, pattern.styleGenome!) : null;
   const motifRiff =
     family === "compute"
       ? computeRiff(pattern.genome)
       : family === "metropolis"
         ? metropolisSeq(pattern.genome)
-        : pattern.style === "d" || pattern.style === "p"
-          ? styleRiff(pattern.blueprintId, pattern.styleGenome!)
-          : null;
+        : riff && override
+          ? riff.map((cell, i) => ({ degree: cell.degree, on: override.lead[i] }))
+          : riff;
   const motifBass =
     family === "compute"
       ? { cells: computeBass(pattern.genome), gateBeats: null }
@@ -2025,6 +2036,7 @@ async function buildRig(
     pattern,
     track,
     layers: resolveLayers(pattern, override),
+    override: override ?? null,
     noise,
     stepDur: secondsPerStep(tempo, pattern.stepsPerBar),
     motifScale,
@@ -2161,15 +2173,55 @@ const PREVIEW_SECTION_ID: Partial<Record<BlueprintId, string>> = {
   metropolisK: "mainA2",
 };
 
+// d/p/f는 레이어 이름부터 v2와 달라서 합성 PREVIEW_SECTION으로는 원곡 드럼이 안 나온다 —
+// 블루프린트에서 가장 센 섹션(피크)을 그대로 쓴다.
+function previewSection(pattern: Pattern): Section {
+  const blueprint = resolvedBlueprintFor(pattern);
+  const previewId = PREVIEW_SECTION_ID[pattern.blueprintId];
+  const realSection = previewId
+    ? blueprint.sections.find((s) => s.id === previewId)
+    : pattern.styleGenome && blueprintFamily(pattern.blueprintId) === null
+      ? blueprint.sections.reduce((a, b) => (b.intensity > a.intensity ? b : a))
+      : undefined;
+  return realSection ? { ...realSection, startBar: 0 } : PREVIEW_SECTION;
+}
+
+/**
+ * 매트릭스 에디터가 보여줄 "편집 전" 킥/멜로디. 계열마다 실제로 치는 패턴이 달라서
+ * (legacy는 pattern.drum.kick, compute/metropolis는 드럼 계열 마스크, d/p/f는 밀도 맵)
+ * 미리듣기와 같은 피크 섹션 기준으로 뽑는다. lead가 null이면 편집할 스텝 멜로디가 없는 곡(f)이다.
+ */
+export function editorLayers(
+  pattern: Pattern,
+  override: PatternOverride | null
+): { kick: boolean[]; lead: StepCell[] | null } {
+  const section = previewSection(pattern);
+  const family = blueprintFamily(pattern.blueprintId);
+  let kick = pattern.drum.kick;
+  let lead: StepCell[] | null = pattern.lead;
+  if (family) {
+    kick = familyDrumHit(section.drumFamily, pattern.genome, 0, pattern.blueprintId)?.mask ?? kick;
+  } else if (pattern.styleGenome) {
+    const map = styleDrumMaps(pattern.blueprintId, pattern.styleGenome).kick;
+    const cue = section.cues.find((c) => c.layer === "kick");
+    const rateStep = cue ? rateAt(cue, 0) : null;
+    if (map && rateStep) {
+      const effective = rateStep.priority ? rateStep : { ...rateStep, priority: map.priority };
+      kick = Array.from({ length: STEP_COUNT }, (_, step) => step < pattern.stepsPerBar && rateStepActive(effective, step));
+    }
+    lead = pattern.style === "f" ? null : styleRiff(pattern.blueprintId, pattern.styleGenome);
+  }
+  if (!override) return { kick, lead };
+  return { kick: override.kick, lead: lead && lead.map((cell, i) => ({ degree: cell.degree, on: override.lead[i] })) };
+}
+
 export async function renderLoopBuffer(pattern: Pattern, options: RenderOptions = {}): Promise<AudioBuffer> {
   const tempo = effectiveTempo(pattern, options.liveControls ?? null);
   const duration = loopDurationSeconds(tempo, pattern.stepsPerBar);
   const { ctx, rig } = await buildRig(pattern, { ...options, onProgress: undefined }, duration);
 
   const blueprint = resolvedBlueprintFor(pattern);
-  const previewId = PREVIEW_SECTION_ID[pattern.blueprintId];
-  const realSection = previewId ? blueprint.sections.find((s) => s.id === previewId) : undefined;
-  const section: Section = realSection ? { ...realSection, startBar: 0 } : PREVIEW_SECTION;
+  const section = previewSection(pattern);
 
   rig.mix.tone.frequency.value = section.filter.from;
   rig.mix.master.gain.value = 0.85;

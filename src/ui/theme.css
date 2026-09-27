@@ -408,13 +408,30 @@ button {
 
 .result-seed {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 10px;
+  column-gap: 10px;
+  row-gap: 4px;
+  min-width: 0;
   margin: 0;
-  font-size: 1.3em;
-  letter-spacing: 0.08em;
+  font-size: 1.15em;
+  letter-spacing: 0.04em;
   color: var(--fg-device);
   overflow-wrap: anywhere;
+}
+
+.result-seed > span {
+  white-space: nowrap;
+}
+
+.result-edited {
+  align-self: center;
+  padding: 2px 6px;
+  border: 1px solid var(--fg-device-dim);
+  border-radius: 4px;
+  font-size: 0.45em;
+  letter-spacing: 0.14em;
+  color: var(--fg-device-dim);
 }
 
 .result-head .device-text-button {

@@ -6,7 +6,7 @@ import {
   effectiveTempo,
   arrangementFor,
   sectionAtSecond,
-  resolveLayers,
+  editorLayers,
   type Pattern,
   type PatternOverride,
   type CrosshairControl,
@@ -147,7 +147,7 @@ export function ResultScreen({
   const player = usePlayer(pattern, override, crosshair, mode, userKit);
   const tempo = effectiveTempo(pattern, crosshair);
   const arrangement = arrangementFor(pattern, tempo);
-  const kick = resolveLayers(pattern, override).kick.slice(0, pattern.stepsPerBar);
+  const kick = editorLayers(pattern, override).kick.slice(0, pattern.stepsPerBar);
 
   const handleDownload = async () => {
     setIsExporting(true);
@@ -199,6 +199,8 @@ export function ResultScreen({
           <h1 className="result-seed">
             <span className="spec-key">SEED</span>
             {pattern.seedInput}
+            {/* 편집값은 시드가 아니라 주소 뒤 파라미터에 담긴다. 시드만으로는 지금 소리가 안 나온다는 표시. */}
+            {(override || crosshair) && <span className="result-edited">{t("resultScreen.edited")}</span>}
           </h1>
           <button type="button" className="device-text-button" onClick={onBackToSeed}>
             {t("resultScreen.newSeed")}

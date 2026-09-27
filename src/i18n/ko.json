@@ -52,7 +52,8 @@
       "sounds": "내 소리",
       "soundsDefault": "기본 킷",
       "soundsCount": "{count}개"
-    }
+    },
+    "edited": "편집됨"
   },
   "userKit": {
     "title": "내 소리",
