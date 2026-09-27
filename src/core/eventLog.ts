@@ -9,13 +9,14 @@ import type { DrumMixer, DrumRole, MonoVoice, Rig } from "./audioEngine";
 import type { SampleBank } from "./samples";
 
 export interface LoggedEvent {
-  kind: "hit" | "note";
+  kind: "hit" | "note" | "hitSlice";
   layer: string;
   time: number;
   level: number;
   freq?: number;
   duration?: number;
   rate?: number;
+  offset?: number;
 }
 
 function round(n: number): number {
@@ -28,6 +29,16 @@ export function createEventLog(): { events: LoggedEvent[]; drums: DrumMixer; voi
   const drums: DrumMixer = {
     hit(role: DrumRole, _sample, time, level, rate = 1) {
       events.push({ kind: "hit", layer: role, time: round(time), level: round(level), rate: round(rate) });
+    },
+    hitSlice(role: DrumRole, _buffer, offsetSec, _durSec, time, level, rate = 1) {
+      events.push({
+        kind: "hitSlice",
+        layer: role,
+        time: round(time),
+        level: round(level),
+        rate: round(rate),
+        offset: round(offsetSec),
+      });
     },
     connect() {
       // 렌더링 단계 전용. 이벤트 캡처엔 안 쓴다.
@@ -60,6 +71,31 @@ export function createEventLog(): { events: LoggedEvent[]; drums: DrumMixer; voi
 
 function noopParam() {
   return { setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, value: 0 };
+}
+
+export interface RecordedAutomation {
+  method: "setValueAtTime" | "linearRampToValueAtTime" | "exponentialRampToValueAtTime";
+  value: number;
+  time: number;
+}
+
+/** 사이드체인처럼 "이 GainNode에 실제로 오토메이션이 찍혔는가"를 검사해야 하는 테스트용
+ *  가짜 GainNode. AudioContext 없이도 setValueAtTime 등 호출을 그대로 기록한다. */
+export function fakeRecordingGain(): { node: GainNode; calls: RecordedAutomation[] } {
+  const calls: RecordedAutomation[] = [];
+  const gain = {
+    value: 1,
+    setValueAtTime(value: number, time: number) {
+      calls.push({ method: "setValueAtTime", value, time });
+    },
+    linearRampToValueAtTime(value: number, time: number) {
+      calls.push({ method: "linearRampToValueAtTime", value, time });
+    },
+    exponentialRampToValueAtTime(value: number, time: number) {
+      calls.push({ method: "exponentialRampToValueAtTime", value, time });
+    },
+  };
+  return { node: { gain } as unknown as GainNode, calls };
 }
 
 export function fakeSampleBank(): SampleBank {

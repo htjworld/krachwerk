@@ -15,6 +15,7 @@ import { deriveTrack } from "./track";
 import { resolveLayers } from "./patternOverride";
 import { computeBass, computeRiff, computeScale, metropolisBass, metropolisScale, metropolisSeq } from "./motifs";
 import { CODE_SPACE, encodeCode } from "./seedCode";
+import { blueprintFor } from "./blueprints";
 
 // seedCode.test.ts/genome.test.ts와 같은 방식의 결정론적 표본 — 항상 유효한 8자 정규 코드.
 function sampleCodes(count: number): string[] {
@@ -81,6 +82,11 @@ function buildFakeRig(pattern: Pattern): { rig: Rig; events: LoggedEvent[] } {
     synthKit: null,
     userKitBuffers: null,
     tonalBuffer: null,
+    blueprint: blueprintFor(pattern.blueprintId),
+    styleMaps: null,
+    styleKit: null,
+    sub808Kit: null,
+    bassSidechain: null,
   };
   return { rig, events: log.events };
 }

@@ -8,6 +8,7 @@ import { mulberry32 } from "./prng";
 import { deriveTrack } from "./track";
 import { resolveLayers } from "./patternOverride";
 import { blueprintFamily } from "./blueprint";
+import { blueprintFor } from "./blueprints";
 import { computeBass, computeRiff, computeScale, metropolisBass, metropolisScale, metropolisSeq } from "./motifs";
 
 function buildFakeRig(pattern: Pattern) {
@@ -57,6 +58,11 @@ function buildFakeRig(pattern: Pattern) {
     synthKit: null,
     userKitBuffers: null,
     tonalBuffer: null,
+    blueprint: blueprintFor(pattern.blueprintId),
+    styleMaps: null,
+    styleKit: null,
+    sub808Kit: null,
+    bassSidechain: null,
   };
   return { rig, events: log.events };
 }

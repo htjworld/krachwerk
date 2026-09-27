@@ -1,5 +1,5 @@
 import { degreeToMidi, midiToFrequency, type Scale } from "./scales";
-import { mulberry32, pick } from "./prng";
+import { hashRand, mulberry32, pick } from "./prng";
 import { STEP_COUNT, type Pattern, type StepCell } from "./pattern";
 import { resolveLayers, type PatternOverride, type ResolvedLayers } from "./patternOverride";
 import { effectiveTempo, type CrosshairControl } from "./crosshairControl";
@@ -13,14 +13,18 @@ import {
   fillSteps,
   rateAt,
   rateStepActive,
+  rateStepVelocity,
   semitoneShift,
+  type Blueprint,
   type BlueprintId,
+  type FillKind,
   type LayerCue,
   type LayerId,
 } from "./blueprint";
 import { blueprintFor } from "./blueprints";
 import { legacyCue } from "./blueprints/legacy";
 import { targetSecondsFor, targetSecondsForStyle } from "./genome";
+import { styleDrumMaps, type DrumMap } from "./styleMotifs";
 import {
   computeBass,
   computeRiff,
@@ -311,13 +315,19 @@ export type DrumRole =
   | "hat"
   | "openHat"
   | "backbeat"
+  | "clap"
   | "perc"
   | "metal"
   | "lowDrum"
   | "tick"
   | "calls"
   | "sig"
-  | "tonal";
+  | "tonal"
+  | "sub"
+  | "chop"
+  | "dialogue"
+  | "clapLayer"
+  | "texture";
 
 interface DrumVoiceSpec {
   level: number;
@@ -330,6 +340,9 @@ const DRUM_VOICES: Record<DrumRole, DrumVoiceSpec> = {
   hat: { level: 0.3, pan: 0.34, send: 0.07 },
   openHat: { level: 0.3, pan: -0.4, send: 0.14 },
   backbeat: { level: 0.6, pan: -0.1, send: 0.22 },
+  // 260927 §13.6 신규. 새 블루프린트(d/p/f)의 clap 레이어 전용 — backbeat와 자리가 겹치지
+  // 않게 따로 둔다.
+  clap: { level: 0.6, pan: 0, send: 0.12 },
   perc: { level: 0.32, pan: 0.5, send: 0.16 },
   metal: { level: 0.36, pan: -0.55, send: 0.32 },
   // compute의 저음 드럼 시퀀스(§4.2). 킥과 같은 자리(레벨·팬·리버브)에서 킥 전용
@@ -343,12 +356,35 @@ const DRUM_VOICES: Record<DrumRole, DrumVoiceSpec> = {
   sig: { level: 0.6, pan: 0, send: 0.35 },
   // VCSL 톤(§15.3, stab 위에 겹치는 샘플). stab과 비슷한 자리(약간 오른쪽, 리버브 많이).
   tonal: { level: 0.5, pan: 0.1, send: 0.3 },
+  // 260927 §13.6 신규 (f switchUp). 킥 버스(kickHighpass)를 같이 쓴다.
+  sub: { level: 1.0, pan: 0, send: 0.0 },
+  // 260927 §13.6 신규 (p 찬트 / f 목소리 조각). hitSlice로만 친다.
+  chop: { level: 0.75, pan: 0, send: 0.25 },
+  // 260927 §13.6 신규 (d 대사). hitSlice로만 친다.
+  dialogue: { level: 0.7, pan: 0, send: 0.2 },
+  // 260927 §13.6 신규 (f 빌드업 클랩, 킥 없는 구간 전용 — 사이드체인 안 건다).
+  clapLayer: { level: 0.55, pan: 0, send: 0.15 },
+  // 260927 §13.6 신규 (d 테이프 히스 / f 일상 소리 베드). 루프 버퍼라 레벨을 낮게 잡는다.
+  texture: { level: 0.3, pan: 0, send: 0 },
 };
 
-const KICK_BUS_ROLES: readonly DrumRole[] = ["kick", "lowDrum"];
+const KICK_BUS_ROLES: readonly DrumRole[] = ["kick", "lowDrum", "sub"];
 
 export interface DrumMixer {
   hit(role: DrumRole, sample: AudioBuffer, time: number, level: number, rate?: number): void;
+  /**
+   * 260927 §13.6 신규. hit과 같은 방식으로 버퍼의 [offsetSec, offsetSec+durSec) 구간만
+   * 재생한다(§6.4 chop/dialogue). 끝 5ms는 페이드아웃해서 자른 자리가 안 튄다.
+   */
+  hitSlice(
+    role: DrumRole,
+    buffer: AudioBuffer,
+    offsetSec: number,
+    durSec: number,
+    time: number,
+    level: number,
+    rate?: number
+  ): void;
   /** 믹싱이 다 끝난 뒤에 부른다. 버퍼를 소스에 물려 그래프에 연결한다. */
   connect(): void;
   /**
@@ -359,7 +395,7 @@ export interface DrumMixer {
   kickHighpass: BiquadFilterNode;
 }
 
-function createDrumMixer(ctx: BaseAudioContext, mix: Mix, totalSamples: number): DrumMixer {
+function createDrumMixer(ctx: BaseAudioContext, mix: Mix, totalSamples: number, panScale = 1): DrumMixer {
   // AudioBuffer의 채널 데이터에 바로 더한다. 중간 배열을 따로 두지 않으려는 것.
   // kick/lowDrum만 별도 버퍼(kickDry)에 모아서 하이패스 하나를 태울 수 있게 한다.
   const dry = ctx.createBuffer(2, totalSamples, ctx.sampleRate);
@@ -406,7 +442,7 @@ function createDrumMixer(ctx: BaseAudioContext, mix: Mix, totalSamples: number):
     hit(role, sample, time, level, rate = 1) {
       const spec = DRUM_VOICES[role];
       const amount = spec.level * level;
-      const angle = ((spec.pan + 1) * Math.PI) / 4;
+      const angle = ((spec.pan * panScale + 1) * Math.PI) / 4;
       const gl = amount * Math.cos(angle) * Math.SQRT2;
       const gr = amount * Math.sin(angle) * Math.SQRT2;
       const gs = amount * spec.send;
@@ -441,6 +477,39 @@ function createDrumMixer(ctx: BaseAudioContext, mix: Mix, totalSamples: number):
         send[j] += v * gs;
       }
     },
+
+    hitSlice(role, buffer, offsetSec, durSec, time, level, rate = 1) {
+      const spec = DRUM_VOICES[role];
+      const amount = spec.level * level;
+      const angle = ((spec.pan * panScale + 1) * Math.PI) / 4;
+      const gl = amount * Math.cos(angle) * Math.SQRT2;
+      const gr = amount * Math.sin(angle) * Math.SQRT2;
+      const gs = amount * spec.send;
+      const [outLeft, outRight] = KICK_BUS_ROLES.includes(role) ? [kickLeft, kickRight] : [left, right];
+
+      const data = buffer.getChannelData(0);
+      const start = Math.round(time * ctx.sampleRate);
+      if (start >= totalSamples) return;
+
+      const offsetFrames = Math.round(offsetSec * ctx.sampleRate);
+      const durFrames = Math.round(durSec * ctx.sampleRate);
+      const fadeFrames = Math.round(0.005 * ctx.sampleRate);
+      const availableSrc = data.length - offsetFrames;
+      if (availableSrc <= 1) return;
+      // hit()의 rate!=1 분기와 같은 이유로 보간용 여유 한 칸을 남긴다.
+      const frames = Math.min(durFrames, Math.floor((availableSrc - 1) / rate), totalSamples - start);
+      for (let i = 0; i < frames; i++) {
+        const pos = offsetFrames + i * rate;
+        const k = pos | 0;
+        const frac = pos - k;
+        const v = data[k] + (data[k + 1] - data[k]) * frac;
+        const fade = i >= frames - fadeFrames ? Math.max(0, (frames - i) / fadeFrames) : 1;
+        const j = start + i;
+        outLeft[j] += v * gl * fade;
+        outRight[j] += v * gr * fade;
+        send[j] += v * gs * fade;
+      }
+    },
   };
 }
 
@@ -468,13 +537,13 @@ const SYNTH_STRIPS: Record<SynthLayer, StripSpec> = {
   drone: { level: 0.25, pan: 0, reverb: 0.35, delay: 0 },
 };
 
-function buildStrip(ctx: BaseAudioContext, mix: Mix, spec: StripSpec): GainNode {
+function buildStrip(ctx: BaseAudioContext, mix: Mix, spec: StripSpec, destBus?: GainNode): GainNode {
   const input = ctx.createGain();
   input.gain.value = spec.level;
   const panner = ctx.createStereoPanner();
   panner.pan.value = spec.pan;
   input.connect(panner);
-  panner.connect(mix.music);
+  panner.connect(destBus ?? mix.music);
   if (spec.reverb > 0) {
     const send = ctx.createGain();
     send.gain.value = spec.reverb;
@@ -833,6 +902,20 @@ export interface Rig {
   userKitBuffers: Partial<Record<UserSlot, AudioBuffer>> | null;
   /** VCSL/Karoryfer 톤(§15.3). track.tonalKit이 null이면 안 채운다. */
   tonalBuffer: AudioBuffer | null;
+  /** 260927 §13.6 신규. pattern.blueprintId로 고른 블루프린트 그 자체 — sidechain/kitFamily/
+   *  lofi처럼 Pattern이 아니라 Blueprint에만 있는 값을 scheduleStyleBar가 읽을 때 쓴다. */
+  blueprint: Blueprint;
+  /** 260927 §6.1 신규. 새 블루프린트(d/p/f)의 드럼 중요도·세기표(styleDrumMaps 결과).
+   *  open/k는 항상 null — scheduleBar가 이 값의 유무로 옛 경로/scheduleStyleBar를 가른다. */
+  styleMaps: Partial<Record<LayerId, DrumMap>> | null;
+  /** 260927 §13.6 신규. 새 블루프린트 드럼 원샷(§7.2 tape/house/garage 프리셋, 단계 6에서
+   *  채운다). 지금은 항상 null. */
+  styleKit: Partial<Record<DrumRole, AudioBuffer>> | null;
+  /** 260927 §13.6 신규. `kitSwap: "sub808"` 섹션 동안 대신 쓰는 킷(f switchUp, 단계 6). */
+  sub808Kit: Partial<Record<DrumRole, AudioBuffer>> | null;
+  /** 260927 §6.5 신규. 베이스 전용 사이드체인 버스 — blueprint.sidechain이 있을 때만 채운다.
+   *  없으면 베이스도 지금처럼 mix.music → mix.sidechain 공유 펌핑을 그대로 탄다. */
+  bassSidechain: GainNode | null;
 }
 
 export function scheduleBar(
@@ -847,6 +930,13 @@ export function scheduleBar(
   // 자유박 섹션(metropolis freeIntro)은 격자 자체가 없다 — pad/glide/드론은
   // renderArrangement가 섹션 단위로 직접 스케줄한다.
   if (section.freeTime) return;
+
+  // 260927 §13.6 item 6: 새 블루프린트(d/p/f, styleMaps가 있다)는 완전히 분리된 경로를
+  // 탄다 — 블루프린트를 9개 늘려도 이 아래 v2 본문은 한 줄도 안 자란다.
+  if (rig.styleMaps) {
+    scheduleStyleBar(rig, section, barIndex, sectionBar, barStart, swing);
+    return;
+  }
 
   const { mix, drums, voices, stabVoices, bank, pattern, track, layers, stepDur } = rig;
   // 내 소리(§15.4): 역할이 매핑되는 슬롯에 사용자가 채워 둔 버퍼가 있으면 그걸 대신 튼다.
@@ -1098,6 +1188,139 @@ export function scheduleBar(
   }
 }
 
+const LAYER_TO_DRUM_ROLE: Partial<Record<LayerId, DrumRole>> = {
+  kick: "kick",
+  hat: "hat",
+  openHat: "openHat",
+  clap: "clap",
+  perc: "perc",
+  sub: "sub",
+  chop: "chop",
+  dialogue: "dialogue",
+  clapLayer: "clapLayer",
+  texture: "texture",
+};
+
+const JITTER_SALT = 0x6a697474; // "jitt"
+const BAR_GATE_SALT = 0x62617267; // "barg"
+
+// tape 게놈(d 전용, §7.3) 하위 두 비트 = 마디 흔들림 4단계. 상위 두 비트(로우패스 4단계)는
+// 로파이 체인(단계 7)이 읽는다 — 여기선 안 쓴다.
+export function tapeJitterMs(tape: number): number {
+  return [4, 8, 14, 20][tape % 4];
+}
+
+/**
+ * §6.5 item 3(Delroy 마디 흔들림). tape 게놈이 있는 스타일(d)만 0이 아니다. scheduleBar를
+ * 부르기 전에 barStart에 이 값을 더한다 — 스텝 사이 간격 자체는 그대로 두기 위해 마디
+ * 단위로만 흔든다(측정이 마디 단위 흔들림이었다).
+ */
+export function barJitterSeconds(pattern: Pattern, barIndex: number): number {
+  const tape = pattern.styleGenome?.tape;
+  if (tape === undefined) return 0;
+  const j = tapeJitterMs(tape) / 1000;
+  const rand = hashRand(pattern.seedHash, JITTER_SALT, barIndex, 0) * 2 - 1;
+  return j * (0.6 * rand + 0.4 * Math.sin((2 * Math.PI * barIndex) / 11));
+}
+
+/**
+ * §13.6 item 6: styleMaps가 있는 새 블루프린트(d/p/f) 전용 경로. v2 scheduleBar 본문과
+ * 완전히 분리해 둬서 블루프린트를 9개 늘려도 저쪽 함수는 한 줄도 안 자란다.
+ *
+ * 알고리즘(§6.1): 레이어별 density → priority[step] > 255−density(부분집합 보장,
+ * rateStepActive 재사용) → window/barGate/skipBars → drumOverride 있으면 그걸로 대체 →
+ * 세기표(velocity) → 스윙·beatShift → 킷(kitSwap) 원샷 → (킥이면) 사이드체인.
+ */
+function scheduleStyleBar(
+  rig: Rig,
+  section: Section,
+  barIndex: number,
+  sectionBar: number,
+  barStart: number,
+  swing: number
+): void {
+  const { pattern, drums, styleMaps, blueprint } = rig;
+  if (!styleMaps) return;
+  const stepsPerBar = pattern.stepsPerBar;
+  // 12칸 격자(shuffle12, §6.2) 자체가 셔플이라 스윙은 무시한다.
+  const effectiveSwing = stepsPerBar === 12 ? 0 : swing;
+  const beatShift = section.beatShift ?? 0;
+  const at = (step: number) =>
+    barStart + (step + beatShift) * rig.stepDur + (step % 2 === 1 ? effectiveSwing * rig.stepDur : 0);
+
+  // 드럼 버스 게인(§6.1 drumGainDb). 정의 안 된 섹션은 0dB로 매번 되돌려서, 이전 섹션의
+  // 보정이 다음 섹션까지 새지 않는다.
+  rig.mix.drum.gain.setValueAtTime(10 ** ((section.drumGainDb ?? 0) / 20), barStart);
+
+  const kit = section.kitSwap === "sub808" ? rig.sub808Kit : rig.styleKit;
+
+  const pumpSidechain = (time: number) => {
+    if (!blueprint.sidechain) return;
+    const { synthDb, bassDb, releaseBeats } = blueprint.sidechain;
+    const beat = rig.stepDur * (stepsPerBar / 4);
+    rig.mix.sidechain.gain.setValueAtTime(10 ** (synthDb / 20), time);
+    rig.mix.sidechain.gain.linearRampToValueAtTime(1, time + Math.min(0.22, releaseBeats * beat * 0.5));
+    if (rig.bassSidechain) {
+      rig.bassSidechain.gain.setValueAtTime(10 ** (bassDb / 20), time);
+      rig.bassSidechain.gain.linearRampToValueAtTime(1, time + releaseBeats * beat);
+    }
+  };
+
+  for (const cue of section.cues) {
+    const map = styleMaps[cue.layer];
+    const role = LAYER_TO_DRUM_ROLE[cue.layer];
+    if (!map || !role) continue; // 드럼이 아닌 레이어(chord 등)는 다른 경로가 담당한다
+    if (cue.barGate !== undefined && hashRand(pattern.seedHash, BAR_GATE_SALT, barIndex, 0) >= cue.barGate) continue;
+    if (cue.skipBars?.includes(sectionBar)) continue;
+
+    const rateStep = rateAt(cue, sectionBar);
+    if (!rateStep) continue;
+    // 블루프린트는 density만 적어 두고(§6.1), priority는 styleDrumMaps가 곡마다 만든 걸 쓴다.
+    const effectiveRateStep = rateStep.priority ? rateStep : { ...rateStep, priority: map.priority };
+    const override = section.drumOverride?.[cue.layer];
+    const sample = kit?.[role];
+    if (!sample) continue;
+
+    for (let step = 0; step < stepsPerBar; step++) {
+      if (!cueActiveAtStep(section, cue.layer, sectionBar, step)) continue;
+      const active = override ? override.includes(step) : rateStepActive(effectiveRateStep, step);
+      if (!active) continue;
+      const velocity = rateStepVelocity(rateStep, step, map.velocity[step] ?? 0.8);
+      const time = at(step);
+      drums.hit(role, sample, time, velocity);
+      if (role === "kick") pumpSidechain(time);
+    }
+  }
+
+  const applyFill = (kind: FillKind) => {
+    // 16칸 전용 필(stepFill/roll13/halfBar8/pickup15)이 실수로 12칸 블루프린트에 붙어도
+    // 격자 밖 스텝은 여기서 걸러진다(§6.2) — 이 필터 하나가 그 금지 규칙의 실제 강제 장치다.
+    const steps = fillSteps(kind).filter((s) => s < stepsPerBar);
+    if (steps.length === 0) return;
+    if (kind === "snareRoll16") {
+      // 중역 타악 16분 전부, 세기 0.4→1.0 선형(Peggy 빌드, §6.1).
+      const clapSample = kit?.clap;
+      if (!clapSample) return;
+      steps.forEach((step, i) => {
+        const velocity = 0.4 + (0.6 * i) / Math.max(1, steps.length - 1);
+        drums.hit("clap", clapSample, at(step), velocity);
+      });
+      return;
+    }
+    // "cut"(Delroy 끝)을 포함한 나머지는 v2 "stop"과 완전히 같은 방식: 첫 박에 킥 한 번.
+    // 뒤가 비는 건 필 메커니즘이 아니라 그 섹션 자체에 다른 큐가 없기 때문이다(compute
+    // "stop" 섹션과 같은 설계, §6.3 d-1 end 섹션 참고).
+    const kickSample = kit?.kick;
+    if (!kickSample) return;
+    for (const step of steps) drums.hit("kick", kickSample, at(step), 1);
+  };
+  const isLastBar = sectionBar === section.bars - 1;
+  for (const f of section.fill) {
+    if (sectionBar % f.everyBars === f.atBarInCycle) applyFill(f.kind);
+  }
+  if (section.endFill && isLastBar) applyFill(section.endFill);
+}
+
 // ---------------------------------------------------------------- 렌더링
 
 // filterCutoff(0..1)를 로우패스 컷오프 주파수(Hz)로 매핑한다. 1이면 가청 대역 위라 사실상
@@ -1192,6 +1415,7 @@ async function buildRig(
   const ctx = new OfflineAudioContext(2, totalSamples, sampleRate);
   if (onProgress) attachProgress(ctx, duration, onProgress);
 
+  const blueprint = blueprintFor(pattern.blueprintId);
   const track = deriveTrack(pattern);
   const bank = await loadSampleBank(ctx, track.kit);
   const mix = buildMix(
@@ -1202,8 +1426,16 @@ async function buildRig(
   );
   const noise = makeNoiseBuffer(ctx, pattern.seedHash, 1);
 
+  // §6.5 item 1(베이스 전용 사이드체인 버스). blueprint.sidechain이 있는 새 블루프린트만
+  // 베이스를 이 버스로 보낸다 — 없으면 지금처럼 mix.music → mix.sidechain 공유 펌핑 그대로다.
+  const bassSidechain = blueprint.sidechain ? ctx.createGain() : null;
+  if (bassSidechain) bassSidechain.connect(mix.master);
+
   const strips = Object.fromEntries(
-    (Object.keys(SYNTH_STRIPS) as SynthLayer[]).map((id) => [id, buildStrip(ctx, mix, SYNTH_STRIPS[id])])
+    (Object.keys(SYNTH_STRIPS) as SynthLayer[]).map((id) => [
+      id,
+      buildStrip(ctx, mix, SYNTH_STRIPS[id], id === "bass" ? (bassSidechain ?? undefined) : undefined),
+    ])
   ) as Record<SynthLayer, GainNode>;
 
   const family = blueprintFamily(pattern.blueprintId);
@@ -1260,10 +1492,17 @@ async function buildRig(
   // VCSL/Karoryfer 톤(§15.3): track.tonalKit이 골라 둔 킷·인덱스로 파일 하나만 받는다.
   const tonalBuffer = track.tonalKit ? await loadTonalSample(ctx, track.tonalKit, track.tonalIndex) : null;
 
+  // §6.1 새 블루프린트(d/p/f) 전용 드럼 경로. open/k는 family가 채워지거나(k) null이라도
+  // pattern.style이 "open"/"k"라서 여기서 항상 null — scheduleBar가 v2 본문을 그대로 탄다.
+  const styleMaps = pattern.styleGenome && family === null ? styleDrumMaps(pattern.blueprintId, pattern.styleGenome) : null;
+  // 측정: 새 블루프린트(d/p/f)는 드럼이 거의 모노다. k는 v2 compute/metropolis 킷을 그대로
+  // 쓰므로 이미 정해진 스테레오 폭을 안 건드린다(styleMaps가 없을 때만 이 분기가 산다).
+  const panScale = styleMaps ? 0.15 : 1;
+
   const rig: Rig = {
     ctx,
     mix,
-    drums: createDrumMixer(ctx, mix, totalSamples),
+    drums: createDrumMixer(ctx, mix, totalSamples, panScale),
     voices: {
       bass: createVoice(ctx, strips.bass, pattern.bassVoice, noise, duration, 0.6),
       lead: createVoice(ctx, strips.lead, pattern.leadVoice, noise, duration, 0.25),
@@ -1287,6 +1526,11 @@ async function buildRig(
     synthKit,
     userKitBuffers: await resolveUserKitBuffers(ctx, userKit, pattern.seedHash),
     tonalBuffer,
+    blueprint,
+    styleMaps,
+    styleKit: null,
+    sub808Kit: null,
+    bassSidechain,
   };
 
   return { ctx, rig };
@@ -1351,7 +1595,8 @@ export async function renderArrangement(pattern: Pattern, options: RenderOptions
     for (let sectionBar = 0; sectionBar < section.bars; sectionBar++) {
       const barIndex = section.startBar + sectionBar;
       const rng = mulberry32((pattern.seedHash ^ ((barIndex + 1) * 0x9e3779b1)) >>> 0);
-      scheduleBar(rig, section, barIndex, sectionBar, barIndex * arrangement.barSeconds, rng, arrangement.swing);
+      const jitter = barJitterSeconds(pattern, barIndex);
+      scheduleBar(rig, section, barIndex, sectionBar, barIndex * arrangement.barSeconds + jitter, rng, arrangement.swing);
     }
   }
 

@@ -13,6 +13,7 @@ import { mulberry32 } from "./prng";
 import { generatePattern } from "./pattern";
 import { resolveLayers } from "./patternOverride";
 import { deriveTrack } from "./track";
+import { blueprintFor } from "./blueprints";
 
 // 모든 테스트가 공유하는 시드 기반 배경(스케일·보이스·베이스/리드 시퀀스·트랙 편성).
 // 이 값 자체를 검증하는 게 아니라 scheduleBar가 큐 해석을 어떻게 하는지만 보는 거라
@@ -68,6 +69,11 @@ function scheduleOneBar(
     synthKit: null,
     userKitBuffers: null,
     tonalBuffer: null,
+    blueprint: blueprintFor(pattern.blueprintId),
+    styleMaps: null,
+    styleKit: null,
+    sub808Kit: null,
+    bassSidechain: null,
   };
   const rng = mulberry32(opts.rngSeed ?? 1);
   scheduleBar(rig, resolved, sectionBar, sectionBar, sectionBar * 16 * rig.stepDur, rng, opts.swing ?? 0);

@@ -20,6 +20,13 @@ export function mulberry32(seed: number): () => number {
   };
 }
 
+// 260927 §6.1/§6.5: barGate·마디 흔들림처럼 "이 (마디, 레이어) 조합에 한 번만" 필요한
+// 결정론적 난수. 순서대로 소비하는 rng() 스텝 시퀀서와 독립적이라 호출 순서가 안 바뀐다.
+export function hashRand(seed: number, salt: number, a: number, b: number): number {
+  const mixed = (Math.imul(seed ^ salt, 0x85ebca6b) ^ Math.imul(a ^ (b << 16), 0xc2b2ae35)) >>> 0;
+  return mulberry32(mixed)();
+}
+
 export function pick<T>(rng: () => number, items: readonly T[]): T {
   return items[Math.floor(rng() * items.length)];
 }
