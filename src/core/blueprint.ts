@@ -28,7 +28,14 @@ export type LayerId =
   | "seqRun"
   | "calls"
   | "glide"
-  | "drone";
+  | "drone"
+  // ---- 260927 아티스트 스타일 확장(§6.4) ----
+  | "chop" // p 찬트 / f 목소리 조각
+  | "dialogue" // d 대사
+  | "chord" // d 신스 코드 / p 건반·오르간 / f 패드·피아노
+  | "texture" // d 테이프 히스 / f 일상 소리 베드
+  | "sub" // f switchUp의 808 서브
+  | "clapLayer"; // f 빌드업 클랩(킥 없는 구간 전용)
 
 /** 음표 단위. 0=쉼(레이어는 켜져 있지만 안 친다), 1=온음표, 2=2분, 4=4분, 8=8분, 16=16분.
  *  셋잇단은 두 곡 모두 없어서 넣지 않는다. */
@@ -59,6 +66,11 @@ export interface RateStep {
    * 있으면 rate/hatShape/density보다 우선한다. compute/metropolis 블루프린트는 안 쓴다.
    */
   mask?: readonly boolean[];
+  /**
+   * 260927 §6.1 신규. 스텝별 세기 0~1 (측정 세기표, §7.3). 없으면 v2 공식(강/고스트 등
+   * downbeat 기반 계산)을 그대로 쓴다. 길이는 section의 stepsPerBar와 같아야 한다.
+   */
+  velocity?: readonly number[];
 }
 
 export interface LayerCue {
@@ -70,6 +82,18 @@ export interface LayerCue {
   // 패턴대로 치는 레이어) 더미 [{atBar:0, rate:16}] 하나만 둔다.
   /** 마디 안에서 칠 수 있는 스텝 범위 (L10). B'계열 = [0, 10] */
   window?: [from: number, to: number];
+  /**
+   * 260927 §6.1 신규. 마디마다 이 확률로만 켜진다(hashRand(seedHash, LAYER_SALT, 곡 마디, 0)
+   * < barGate). 신스가 한 마디씩 띄엄띄엄 끼어드는 Delroy 구조(§4.1 D15: Promise 16마디 중
+   * 5마디, Trigger 9마디 중 4마디), Fred 목소리 조각 등에 쓴다. 없으면 항상 켜져 있다(1과 같다).
+   */
+  barGate?: number;
+  /**
+   * 260927 §6.1 신규. 섹션-로컬 마디 번호 목록. 이 마디에서는 레이어를 끈다(베이스가
+   * 한 마디씩 비는 §4.3 F15, Wild Animal 34·36마디). barGate와 달리 결정론적으로 고정된
+   * 자리다.
+   */
+  skipBars?: number[];
 }
 
 export type FillKind =
@@ -83,7 +107,10 @@ export type FillKind =
   | "legacyTom"
   | "legacySnare"
   | "legacyMetal"
-  | "legacyDouble";
+  | "legacyDouble"
+  // 260927 §6.1 신규.
+  | "cut" // 첫 박 이후 전 레이어 정지 (Delroy 끝)
+  | "snareRoll16"; // 중역 타악 16분 전부, 세기 0.4→1.0 선형 (Peggy 빌드)
 
 export type DrumFamily =
   | "none"
@@ -126,16 +153,77 @@ export interface BlueprintSection {
   synthWidth?: number;
   /** 시그니처 사운드(§15.2)가 한 번씩 울리는 섹션-로컬 마디 인덱스. compute/metropolis만 쓴다. */
   sigSlots?: number[];
+  /** 260927 §6.1 신규. 이 섹션 동안 드럼 킷을 바꾼다(Fred switchUp 비트 전환). */
+  kitSwap?: "sub808";
+  /** 260927 §6.1 신규. 이 섹션 드럼 버스 게인 보정(dB). Trigger 인트로의 약한 드럼,
+   *  Delilah 드롭 복귀 구간의 눌린 드럼 등. */
+  drumGainDb?: number;
+  /** 260927 §6.1 신규. 이 섹션 드럼 전 레이어를 16분 N칸 뒤로 민다(Delilah D13–D14: 비트
+   *  전환 뒤 끝까지 한 칸 밀린 채로 간다). 신스·베이스는 안 민다. */
+  beatShift?: number;
+  /**
+   * 260927 §13.3 신규. 이 섹션에서 해당 레이어의 필수 스텝을 이 목록으로 통째로 바꾼다
+   * (clubHouse halfBeat: kick·clap이 스텝 4·12만, switchUp halfFeel: 스네어가 스텝 8만).
+   * styleDrumMaps가 만든 기본 맵보다 우선한다.
+   */
+  drumOverride?: Partial<Record<LayerId, number[]>>;
 }
 
-export type BlueprintId = "compute" | "metropolis" | "classicBuild" | "slowBurn" | "doubleDrop";
+export type BlueprintId =
+  // open (v2, 불변)
+  | "compute"
+  | "metropolis"
+  | "classicBuild"
+  | "slowBurn"
+  | "doubleDrop"
+  // k
+  | "computeK"
+  | "metropolisK"
+  // d
+  | "tapeJam"
+  | "fourFloorJam"
+  | "beachDemo"
+  | "shuffle12"
+  // p
+  | "clubHouse"
+  | "slowJam"
+  // f
+  | "garageShuffle"
+  | "halfStep"
+  | "switchUp";
+
+/** open = 기본 코드(8자)가 쓰는 기존 5개 블루프린트. 나머지는 얼굴 버튼(스타일 코드)
+ *  전용이다(§6.1). */
+export type StyleId = "open" | "k" | "d" | "p" | "f";
 
 export interface Blueprint {
   id: BlueprintId;
+  /** 260927 §6.1 신규. 이 블루프린트가 속한 스타일 — 블루프린트 집합이 스타일끼리
+   *  겹치지 않는다는 유일성 증명(§5.5)의 근거다. */
+  style: StyleId;
   tempoRange: [number, number]; // 정수 BPM 16개 폭 (§9.2 g4)
   /** 홀수 16분 스텝을 16분 길이의 몇 %만큼 늦출지. compute 0, metropolis 0.04 */
   swing: number;
   sections: BlueprintSection[];
+  /**
+   * 260927 §6.1 신규. 실제 BPM = 크로스헤어 템포(tempoRange, 104~132 인코딩) × tempoScale.
+   * 기본 1. 크로스헤어 인코딩을 안 바꾸면서 87 BPM(0.75), 102 BPM(0.8), 134 BPM(1.05) 같은
+   * 곡을 담는다(R10).
+   */
+  tempoScale?: number;
+  /** 260927 §6.1 신규. 마디당 칸 수. 기본 16. shuffle12만 12(8분 셋잇단, §6.2). */
+  stepsPerBar?: 16 | 12;
+  /** 260927 §6.1 신규. 길이 조정 반올림 단위(§8.2). 기본 4. compute·Delroy 계열은 2. */
+  roundTo?: 2 | 4;
+  /** 260927 §6.1 신규. 드럼 원샷 출처. v2 5종은 기존 경로(synthKit/legacy 킷)를 그대로 쓴다
+   *  (undefined). */
+  kitFamily?: "circuitK" | "skylineK" | "tape" | "house" | "garage";
+  /** 260927 §6.1/§6.5 신규. 베이스 전용 사이드체인 버스. 없으면 v2 공유 펌핑 그대로. */
+  sidechain?: { synthDb: number; bassDb: number; releaseBeats: number };
+  /** 260927 §6.1/§6.5 신규. 마스터 로파이 체인(Delroy). 세부 수치는 게놈 tape가 고른다. */
+  lofi?: boolean;
+  /** 260927 §6.1 신규. 신스 기본 스테레오 폭(0~1). 섹션 synthWidth가 있으면 그게 우선한다. */
+  synthWidth?: number;
 }
 
 // ---------------------------------------------------------------- 해석 (§7.1)
@@ -174,6 +262,24 @@ export function rateStepActive(rateStep: RateStep, step: number): boolean {
   if (rateStep.priority && rateStep.density !== undefined) return rateStep.priority[step] > 255 - rateStep.density;
   if (rateStep.hatShape) return HAT_SHAPE_STEPS[rateStep.hatShape][step];
   return rateGridHas(rateStep.rate, step);
+}
+
+/**
+ * 260927 §6.3: computeK/metropolisK는 v2 compute/metropolis 섹션을 그대로 복사해 쓰므로
+ * (kraftwerkK.ts), 드럼 계열·조성·리프 생성(motifs.ts)도 "compute"/"metropolis"와 완전히
+ * 같은 로직을 타야 한다 — blueprintId 문자열만 다를 뿐이다. 이 함수 하나로 그 동치 관계를
+ * 표현해서, audioEngine.ts/motifs.ts 여기저기서 `=== "compute" || === "computeK"`를
+ * 반복하지 않는다.
+ */
+export function blueprintFamily(id: BlueprintId): "compute" | "metropolis" | null {
+  if (id === "compute" || id === "computeK") return "compute";
+  if (id === "metropolis" || id === "metropolisK") return "metropolis";
+  return null;
+}
+
+/** RateStep에 velocity 표가 있으면 그 스텝 값을, 없으면 fallback을 돌려준다(§6.1 신규). */
+export function rateStepVelocity(rateStep: RateStep, step: number, fallback: number): number {
+  return rateStep.velocity ? rateStep.velocity[step] : fallback;
 }
 
 /** 큐의 rateSteps 중 이 마디(섹션 기준 sectionBar)에 적용되는 것: atBar가 sectionBar
@@ -263,6 +369,13 @@ export function fillSteps(kind: FillKind): readonly number[] {
     case "legacyMetal":
     case "legacyDouble":
       return [];
+    // 260927 §6.1 신규.
+    case "cut": // 첫 박 이후 전 레이어 정지 (Delroy 끝). "stop"과 스텝은 같고 이름만 다르다
+      // — v2 "stop"은 곡 중간의 짧은 정지, "cut"은 곡이 끝나며 뚝 끊기는 것이라 뜻이 다르다.
+      return [0];
+    case "snareRoll16": // 중역 타악 16분 전부. 세기 0.4→1.0 선형 램프는 호출부(§13.6
+      // scheduleStyleBar)가 fillSteps 순서(0→15)로 직접 계산한다.
+      return [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
   }
 }
 

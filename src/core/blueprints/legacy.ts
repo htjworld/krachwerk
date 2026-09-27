@@ -83,6 +83,7 @@ const OPEN = 18000;
 // 0. 전형적인 빌드업: 드럼 인트로 → 한 겹씩 추가 → 중간에 킥 빼기 → 빌드 → 피크 → 아웃트로
 export const classicBuild: Blueprint = {
   id: "classicBuild",
+  style: "open",
   tempoRange: [112, 127], // §16.4 표. 아직 §11 단계 6 전까진 안 쓰인다(tempo는 여전히 시드 rng).
   swing: 0,
   sections: ([
@@ -149,6 +150,7 @@ export const classicBuild: Blueprint = {
 // 1. 느리게 태우는 쪽: 인트로가 길고 브레이크다운이 멜로디 중심, 피크가 한 번 길게
 export const slowBurn: Blueprint = {
   id: "slowBurn",
+  style: "open",
   tempoRange: [104, 119],
   swing: 0,
   sections: ([
@@ -207,6 +209,7 @@ export const slowBurn: Blueprint = {
 // 2. 초반부터 때리고 두 번 떨어뜨리는 쪽
 export const doubleDrop: Blueprint = {
   id: "doubleDrop",
+  style: "open",
   tempoRange: [117, 132],
   swing: 0,
   sections: ([
@@ -274,8 +277,12 @@ export const doubleDrop: Blueprint = {
 // 가리키므로 순서를 바꾸면 안 된다.
 export const LEGACY_BLUEPRINTS: Blueprint[] = [classicBuild, slowBurn, doubleDrop];
 
+/** motifs.ts의 blueprintIdFor(기본 코드 g1)가 돌려주는 5개 값만 다룬다 — 260927 확장의
+ *  새 블루프린트 id들은 `blueprints/index.ts`의 blueprintFor가 스타일별로 따로 찾는다. */
+export type OpenBlueprintId = "compute" | "metropolis" | "classicBuild" | "slowBurn" | "doubleDrop";
+
 /** blueprintId(motifs.ts의 blueprintIdFor가 돌려주는 값)로 실제 Blueprint를 찾는다. */
-export function blueprintById(id: Blueprint["id"]): Blueprint {
+export function blueprintById(id: OpenBlueprintId): Blueprint {
   switch (id) {
     case "classicBuild":
       return classicBuild;

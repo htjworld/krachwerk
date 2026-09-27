@@ -38,6 +38,7 @@ function section(
 
 export const metropolis: Blueprint = {
   id: "metropolis",
+  style: "open",
   tempoRange: [115, 130],
   swing: 0.04,
   sections: [

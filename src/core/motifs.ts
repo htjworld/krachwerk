@@ -3,7 +3,7 @@
 //   §11 단계 5: 드럼 계열(g8) — legacy 열만. 완료.
 //   §11 단계 6: 조성·템포·리프·베이스(g2~g7) + compute/metropolis 드럼 계열. 지금 이 파일.
 
-import { euclideanPattern, type BlueprintId, type DrumFamily } from "./blueprint";
+import { blueprintFamily, euclideanPattern, type BlueprintId, type DrumFamily } from "./blueprint";
 import { makeScale, type Scale } from "./scales";
 import type { Genome } from "./genome";
 import type { StepCell } from "./pattern";
@@ -335,7 +335,8 @@ export function familyDrumHit(
     case "fourFloor":
       // metropolis의 메인 킥은 legacy처럼 선택 스텝이 없다 — 항상 0·4·8·12뿐이다(§16.4
       // motifs.ts 표 metropolis 열). 픽업 스텝15/고스트 흔들림은 compute B계열 전용이다.
-      if (blueprintId === "metropolis") return { role: "kick", mask: metropolisFourFloorKick() };
+      // metropolisK도 같은 규칙을 탄다(blueprintFamily, §6.3 k-1/k-2).
+      if (blueprintFamily(blueprintId) === "metropolis") return { role: "kick", mask: metropolisFourFloorKick() };
       return { role: "kick", mask: fourFloorMask(genome.drumVariant, barIndex) };
     case "fourFloorCut":
       return { role: "kick", mask: fourFloorMask(genome.drumVariant, barIndex) };

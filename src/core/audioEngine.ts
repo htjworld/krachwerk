@@ -2,11 +2,12 @@ import { degreeToMidi, midiToFrequency, type Scale } from "./scales";
 import { mulberry32, pick } from "./prng";
 import { STEP_COUNT, type Pattern, type StepCell } from "./pattern";
 import { resolveLayers, type PatternOverride, type ResolvedLayers } from "./patternOverride";
-import type { CrosshairControl } from "./crosshairControl";
+import { effectiveTempo, type CrosshairControl } from "./crosshairControl";
 import type { VoiceId } from "./voices";
 import { loadSampleBank, type SampleBank, type SampleId } from "./samples";
 import { buildArrangement, type Arrangement, type Section } from "./arrangement";
 import {
+  blueprintFamily,
   cueActiveAtStep,
   cueFor,
   fillSteps,
@@ -17,8 +18,9 @@ import {
   type LayerCue,
   type LayerId,
 } from "./blueprint";
-import { blueprintById, legacyCue } from "./blueprints/legacy";
-import { targetSecondsFor } from "./genome";
+import { blueprintFor } from "./blueprints";
+import { legacyCue } from "./blueprints/legacy";
+import { targetSecondsFor, targetSecondsForStyle } from "./genome";
 import {
   computeBass,
   computeRiff,
@@ -38,17 +40,27 @@ import { loadSynthKit, type SynthKit } from "./drumSynth";
 import { ROLE_TO_USER_SLOT, USER_SLOTS, type UserSlot } from "./userKit";
 import { loadTonalSample } from "./tonalBank";
 
-export function secondsPerStep(tempo: number): number {
-  return 60 / tempo / 4;
+/** stepsPerBar 기본값 16(4분음표 하나에 16분 4칸). 12(8분 셋잇단, shuffle12 §6.2)는 한 마디를
+ *  12칸으로 나눈다 — 마디 길이(barSeconds = 60/bpm×4)는 그대로고 칸 폭만 달라진다. */
+export function secondsPerStep(tempo: number, stepsPerBar: 16 | 12 = 16): number {
+  return (60 / tempo) * 4 / stepsPerBar;
 }
 
-/** 16스텝 = 4/4 한 마디 */
-export function loopDurationSeconds(tempo: number): number {
-  return secondsPerStep(tempo) * STEP_COUNT;
+/** 한 마디(4/4) 길이. */
+export function loopDurationSeconds(tempo: number, stepsPerBar: 16 | 12 = 16): number {
+  return secondsPerStep(tempo, stepsPerBar) * stepsPerBar;
 }
 
+// 260927: 길이 계산이 open(genome.length)과 스타일 코드(styleGenome.length)에서 다른 곳에
+// 있어서 하나로 모은다.
+function targetSecondsForPattern(pattern: Pattern): number {
+  return pattern.style === "open" ? targetSecondsFor(pattern.genome) : targetSecondsForStyle(pattern.styleGenome!);
+}
+
+/** tempo는 실제 BPM이어야 한다(§6.6) — 크로스헤어 단위 그대로 넘기면 tempoScale이 있는
+ *  블루프린트에서 길이·타이밍이 어긋난다. 호출부는 effectiveTempo(pattern, control)를 쓴다. */
 export function arrangementFor(pattern: Pattern, tempo: number): Arrangement {
-  return buildArrangement(blueprintById(pattern.blueprintId), tempo, targetSecondsFor(pattern.genome));
+  return buildArrangement(blueprintFor(pattern.blueprintId), tempo, targetSecondsForPattern(pattern));
 }
 
 export const DEFAULT_SAMPLE_RATE = 44100;
@@ -844,8 +856,9 @@ export function scheduleBar(
     drums.hit(role, override ?? sample, time, level, rate);
   };
   const intensity = section.intensity;
-  const isCompute = pattern.blueprintId === "compute";
-  const isMetropolis = pattern.blueprintId === "metropolis";
+  const family = blueprintFamily(pattern.blueprintId);
+  const isCompute = family === "compute";
+  const isMetropolis = family === "metropolis";
   const familyHit =
     isCompute || isMetropolis ? familyDrumHit(section.drumFamily, pattern.genome, barIndex, pattern.blueprintId) : null;
   const octave = pattern.scale.intervals.length;
@@ -1174,7 +1187,7 @@ async function buildRig(
 ): Promise<{ ctx: OfflineAudioContext; rig: Rig }> {
   const { override, liveControls, onProgress, onChunk, userKit } = options;
   const sampleRate = options.sampleRate || DEFAULT_SAMPLE_RATE;
-  const tempo = liveControls?.tempo ?? pattern.tempo;
+  const tempo = effectiveTempo(pattern, liveControls ?? null);
   const totalSamples = Math.ceil(duration * sampleRate);
   const ctx = new OfflineAudioContext(2, totalSamples, sampleRate);
   if (onProgress) attachProgress(ctx, duration, onProgress);
@@ -1193,48 +1206,54 @@ async function buildRig(
     (Object.keys(SYNTH_STRIPS) as SynthLayer[]).map((id) => [id, buildStrip(ctx, mix, SYNTH_STRIPS[id])])
   ) as Record<SynthLayer, GainNode>;
 
+  const family = blueprintFamily(pattern.blueprintId);
   const motifScale =
-    pattern.blueprintId === "compute"
+    family === "compute"
       ? computeScale(pattern.genome)
-      : pattern.blueprintId === "metropolis"
+      : family === "metropolis"
         ? metropolisScale(pattern.genome)
         : pattern.scale;
   const motifRiff =
-    pattern.blueprintId === "compute"
-      ? computeRiff(pattern.genome)
-      : pattern.blueprintId === "metropolis"
-        ? metropolisSeq(pattern.genome)
-        : null;
+    family === "compute" ? computeRiff(pattern.genome) : family === "metropolis" ? metropolisSeq(pattern.genome) : null;
   const motifBass =
-    pattern.blueprintId === "compute"
+    family === "compute"
       ? { cells: computeBass(pattern.genome), gateBeats: null }
-      : pattern.blueprintId === "metropolis"
+      : family === "metropolis"
         ? (() => {
             const b = metropolisBass(pattern.genome);
             return { cells: b.cells, gateBeats: b.gateBeats };
           })()
         : null;
-  // "calls" 큐는 지금 compute 블루프린트만 쓴다(§16.4). 언어는 게놈 밖 — 곡 정체성과 무관하다.
+  // "calls" 큐: 기본 compute + k 스타일(codeRead 섹션, metropolisK는 pulseIntro/breakdown도)만
+  // 쓴다(§16.4, kraftwerkK.ts). 언어는 게놈 밖 — 곡 정체성과 무관하다.
   const voiceLang: VoiceLang = pattern.seedHash % 2 === 0 ? "de" : "en";
-  const voiceBank = pattern.blueprintId === "compute" ? await loadVoiceForCode(ctx, voiceLang, pattern.seedInput) : null;
+  const usesCalls =
+    pattern.blueprintId === "compute" || pattern.blueprintId === "computeK" || pattern.blueprintId === "metropolisK";
+  const voiceBank = usesCalls ? await loadVoiceForCode(ctx, voiceLang, pattern.seedInput) : null;
 
-  // 시그니처 사운드(§15.2): sigSlots가 있는 compute/metropolis만, 곡 하나당 S2~S6 중 하나.
+  // 시그니처 사운드(§15.2): sigSlots가 있는 compute/metropolis 계열만, 곡 하나당 S2~S6 중 하나.
   // (S1 로봇 목소리는 이미 위 voiceBank/"calls" 큐가 맡는다.)
-  const usesSig = pattern.blueprintId === "compute" || pattern.blueprintId === "metropolis";
+  const usesSig = family !== null;
   let sigBuffer: AudioBuffer | null = null;
   if (usesSig) {
+    const sigKinds = ["quindar", "bell", "mech", "modem", "space"] as const;
     const sigRng = mulberry32((pattern.seedHash ^ 0x51617) >>> 0);
-    const kind = pick(sigRng, ["quindar", "bell", "mech", "modem", "space"] as const);
+    // k(styleGenome.sig, 기수 6 — S1은 로봇 목소리라 여기 5개 풀에 안 들어가서 %5로 접는다)는
+    // 게놈이 정하고, open은 지금처럼 seedHash 기반 rng로 고른다(불변, R9 — sigRng를 pick에
+    // 먼저 통과시켜야 이어지는 sigRng() 인덱스 추첨이 예전과 같다).
+    const kind = pattern.styleGenome ? sigKinds[(pattern.styleGenome.sig ?? 0) % sigKinds.length] : pick(sigRng, sigKinds);
     if (kind === "quindar") sigBuffer = makeQuindarBuffer(ctx);
     else if (kind === "bell") sigBuffer = makeBellBuffer(ctx, pattern.seedHash);
     else sigBuffer = await loadSigSample(ctx, kind as SigSampleKind, Math.floor(sigRng() * 12));
   }
 
-  // 합성 드럼 킷(§14.2 K): compute/metropolis는 legacy 샘플 대신 자기 킷으로 킥·백비트·햇을 낸다.
+  // 합성 드럼 킷(§14.2 K): compute/metropolis 계열은 legacy 샘플 대신 자기 킷으로 킥·백비트·햇을
+  // 낸다. k도 지금은 같은 circuit/skyline 킷을 쓴다 — 게놈별 프리셋(circuitK/skylineK, §7.2)은
+  // 단계 6에서 붙인다.
   const synthKit =
-    pattern.blueprintId === "compute"
+    family === "compute"
       ? await loadSynthKit(ctx.sampleRate, "circuit", pattern.seedHash)
-      : pattern.blueprintId === "metropolis"
+      : family === "metropolis"
         ? await loadSynthKit(ctx.sampleRate, "skyline", pattern.seedHash)
         : null;
 
@@ -1259,7 +1278,7 @@ async function buildRig(
     track,
     layers: resolveLayers(pattern, override),
     noise,
-    stepDur: secondsPerStep(tempo),
+    stepDur: secondsPerStep(tempo, pattern.stepsPerBar),
     motifScale,
     motifRiff,
     motifBass,
@@ -1275,7 +1294,7 @@ async function buildRig(
 
 /** 3분짜리 전체 트랙. 섹션마다 레이어, 음량, 필터가 전부 바뀐다. */
 export async function renderArrangement(pattern: Pattern, options: RenderOptions = {}): Promise<AudioBuffer> {
-  const tempo = options.liveControls?.tempo ?? pattern.tempo;
+  const tempo = effectiveTempo(pattern, options.liveControls ?? null);
   const arrangement = arrangementFor(pattern, tempo);
   // 리버브/딜레이 꼬리가 잘리지 않게 뒤에 여유를 둔다.
   const duration = arrangement.totalSeconds + 3;
@@ -1363,14 +1382,16 @@ const PREVIEW_SECTION: Section = {
 const PREVIEW_SECTION_ID: Partial<Record<BlueprintId, string>> = {
   compute: "bGroove",
   metropolis: "mainA2",
+  computeK: "bGroove",
+  metropolisK: "mainA2",
 };
 
 export async function renderLoopBuffer(pattern: Pattern, options: RenderOptions = {}): Promise<AudioBuffer> {
-  const tempo = options.liveControls?.tempo ?? pattern.tempo;
-  const duration = loopDurationSeconds(tempo);
+  const tempo = effectiveTempo(pattern, options.liveControls ?? null);
+  const duration = loopDurationSeconds(tempo, pattern.stepsPerBar);
   const { ctx, rig } = await buildRig(pattern, { ...options, onProgress: undefined }, duration);
 
-  const blueprint = blueprintById(pattern.blueprintId);
+  const blueprint = blueprintFor(pattern.blueprintId);
   const previewId = PREVIEW_SECTION_ID[pattern.blueprintId];
   const realSection = previewId ? blueprint.sections.find((s) => s.id === previewId) : undefined;
   const section: Section = realSection ? { ...realSection, startBar: 0 } : PREVIEW_SECTION;

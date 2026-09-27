@@ -11,8 +11,13 @@ export function defaultCrosshairControl(pattern: Pattern): CrosshairControl {
   return { tempo: pattern.tempo, filterCutoff: 1 };
 }
 
+/**
+ * 260927 §6.6: 실제 BPM = 크로스헤어 단위 템포(슬라이더 값 또는 pattern.tempo, 둘 다
+ * 104~132 폭) × blueprint.tempoScale. open 스타일은 tempoScale 1이라 지금까지와 똑같이
+ * 크로스헤어 값 그대로가 실제 BPM이다 — 인코딩(104~132)은 안 바뀐다(R10).
+ */
 export function effectiveTempo(pattern: Pattern, control: CrosshairControl | null): number {
-  return control?.tempo ?? pattern.tempo;
+  return (control?.tempo ?? pattern.tempo) * pattern.tempoScale;
 }
 
 export function encodeCrosshairControl(control: CrosshairControl): string {

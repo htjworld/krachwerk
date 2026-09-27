@@ -41,7 +41,9 @@ export function buildArrangement(blueprint: Blueprint, tempo: number, targetSeco
   const barSeconds = (60 / tempo) * 4;
   const totalNominalBars = specs.reduce((sum, spec) => sum + spec.bars, 0);
   const scale = targetSeconds / barSeconds / totalNominalBars;
-  const roundTo = blueprint.id === "compute" ? 2 : 4;
+  // 260927: compute의 특례(2마디 반올림)를 하드코딩된 id 분기 대신 블루프린트 데이터
+  // 필드(roundTo)로 옮겼다 — 새 블루프린트들도 각자 값을 선언한다(§6.1).
+  const roundTo = blueprint.roundTo ?? 4;
 
   let startBar = 0;
   const sections = specs.map((spec) => {

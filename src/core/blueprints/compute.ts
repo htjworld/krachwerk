@@ -34,8 +34,10 @@ const OPEN = 18000;
 
 export const compute: Blueprint = {
   id: "compute",
+  style: "open",
   tempoRange: [114, 129],
   swing: 0,
+  roundTo: 2, // §8.2: 원곡 섹션이 12·20마디 단위라 4마디 반올림이면 차이가 크다 (v2 arrangement.ts 특례를 그대로 옮겼다)
   sections: [
     // 1. callIntro (0–3): 드럼 없음, calls만. 시그니처 사운드(§15.2)는 마지막 마디.
     section({
