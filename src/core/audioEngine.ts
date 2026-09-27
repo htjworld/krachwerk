@@ -852,7 +852,14 @@ function createVoice(
       pulseGain.connect(source);
       const pulseOsc = osc("square", 1, 0, pulseGain);
 
-      // 모음 "a": F1 800 / F2 1150 / F3 2900, Q 8/10/12.
+      // 모음 "a": F1 800 / F2 1150 / F3 2900, Q 8/10/12. 좁은 밴드패스 3개가 톱니+펄스의
+      // 배음 대부분을 걸러내서 필터 통과 후 신호가 원래 파형보다 훨씬 작다 — 다른 보이스는
+      // 필터 없이 amp로 직결이라 같은 peak값이라도 formantVox만 훨씬 조용하게 들린다(목소리
+      // 레이어 하나만 있는 섹션, 예: f voiceAlone/voiceOnly에서 특히 티가 난다). 메이크업
+      // 게인으로 보정한다.
+      const formantMakeup = ctx.createGain();
+      formantMakeup.gain.value = 3.5;
+      formantMakeup.connect(amp);
       for (const [freq, q] of [
         [800, 8],
         [1150, 10],
@@ -863,7 +870,7 @@ function createVoice(
         formant.frequency.value = freq;
         formant.Q.value = q;
         source.connect(formant);
-        formant.connect(amp);
+        formant.connect(formantMakeup);
       }
 
       // 비브라토 5.2Hz ±15센트(detune). ponytail: "노트 시작 150ms 뒤부터"는 노트마다
