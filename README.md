@@ -1,92 +1,72 @@
-# Krachwerk
+<div align="center">
+  <h1>Krachwerk</h1>
+  <a href="https://htjworld.github.io/krachwerk/">🔗 서비스 바로가기</a>
+</div>
 
-시드 하나로 크라프트베르크풍 전자음악을 절차적으로 생성하는 웹앱. 한 마디 루프가
-아니라 인트로부터 아웃트로까지 구성이 계속 바뀌는 3분짜리 트랙을 만든다. 같은 시드는
-언제, 어디서 열어도 항상 같은 트랙을 재현한다. 서버 없이 브라우저 안에서만 생성,
-재생, 다운로드가 이뤄진다.
+<br />
 
-## 실행
+> 시드 하나로 3분 안팎의 전자음악을 만드는 웹앱 — 같은 시드는 누구에게나 같은 곡으로 들립니다
 
+## Background
+
+Kraftwerk의 음악을 듣다가 비슷한 결의 곡을 직접 만들어 보고 싶었습니다.
+기존 음악 생성 도구는 조정해야 할 설정값이 너무 많거나, AI가 만든 결과물 특유의 어색함이 남아 오히려 이질적으로 들렸습니다.
+
+Krachwerk는 설정 대신 시드 하나로 곡을 정합니다. 정해진 규칙에 따라 수학적으로 곡을 조립하기 때문에 10자 시드 약 3,656조 개가 모두 서로 다른 곡이 되고, 같은 시드는 언제 어디서 열어도 같은 곡을 냅니다.
+가장 좋아하는 아티스트 네 명의 스타일과 테크노를 더해 5개 스타일, 14개 곡 구조로 3분 안팎의 곡을 만듭니다.
+
+## Features
+
+- 시드 하나로 곡 생성 — 빈 칸으로 생성하면 5개 스타일이 같은 확률로 나옵니다
+- 스타일 선택 — Kraftwerk, Delroy Edwards, Fred again.., Peggy Gou 사진을 누르면 그 스타일의 시드가 채워집니다
+- 구성이 바뀌는 3분 트랙 — 인트로부터 아웃트로까지 섹션마다 악기 구성이 달라지고, 재생바에서 섹션 단위로 이동할 수 있습니다
+- 링크 공유 — 시드와 편집 내용이 주소 하나에 담겨, 받는 사람도 같은 곡을 듣습니다
+- 패턴 편집 — 킥과 멜로디 스텝을 켜고 끄며 한 마디 루프로 바로 들어볼 수 있습니다
+- 라이브 컨트롤 — 템포와 톤을 조절하고 두 슬롯에 저장해 둘 수 있습니다
+- 내 소리 — 직접 녹음한 소리를 드럼과 목소리 자리에 끼워 넣습니다. 파일은 브라우저에만 저장됩니다
+- WAV 다운로드, 한국어/영어 지원
+
+## Preview
+
+| <시드 입력 화면과 아티스트 사진> | <생성된 트랙 정보와 재생 화면> | <패턴 편집 화면> |
+|-----------|-----------|-----------|
+| ![seed](./assets/seed.png) | ![result](./assets/result.png) | ![pattern](./assets/pattern.png) |
+
+## Tech Stack
+
+**Frontend**  
+[![Skills](https://skillicons.dev/icons?i=react,vite)](https://skillicons.dev)
+
+**Infra**  
+[![Skills](https://skillicons.dev/icons?i=githubactions)](https://skillicons.dev)
+
+## Getting Started
+
+**Requirements**
+- Node.js 20.19+ 또는 22.12+
+
+**macOS / Linux**
 ```bash
+git clone https://github.com/htjworld/krachwerk.git
+cd krachwerk
 npm install
-npm run dev      # 개발 서버
-npm run build    # 타입체크 + 프로덕션 빌드 (dist/)
-npm run preview  # 빌드 결과 미리보기
-npm test         # vitest
+npm run dev  # http://localhost:5173/krachwerk/
 ```
 
-## 어떻게 동작하나
+**Windows**
+```bash
+git clone https://github.com/htjworld/krachwerk.git
+cd krachwerk
+npm install
+npm run dev  # http://localhost:5173/krachwerk/
+```
 
-### 시드 → 게놈 → 곡
+**Deploy**
 
-- 시드 코드는 base36 10자 한 가지 형식이다(예 `k3f9x2q1ab`). 36^10개 전부가 정규 코드이고,
-  자유 텍스트는 `canonicalize`가 해시해서 그중 하나로 바꾼다.
-- 첫 글자가 장르를 정한다. 36글자를 다섯 장르에 7/7/7/7/8개씩 나눴고, 맨 앞 글자가 대표 글자다
-  (`k012345` Kraftwerk, `d6789ab` Delroy Edwards, `pceghij` Peggy Gou, `flmnoqr` Fred again..,
-  `tsuvwxyz` 테크노). 빈 칸으로 생성하면 다섯 장르가 20%씩 나오고, 얼굴 버튼은 그 장르의
-  대표 글자로 시작하는 코드를 만든다.
-- 나머지 9자(장르 안 번호)를 Feistel 치환(4라운드, cycle-walking)으로 섞은 뒤 장르별 필드로
-  이루어진 **게놈**으로 쪼갠다(`genome.ts`). 서로 다른 코드는 반드시 다른 게놈이 되고, 모든
-  필드의 모든 값이 실제로 나오며, 멜로디 세부를 뺀 핵심 필드는 모든 조합이 다 들어간다.
-- Kraftwerk 장르는 compute("It's More Fun to Compute / Home Computer" 분석 기반)와
-  metropolis("Metropolis" 분석 기반) 계열을, 테크노 장르는 기존 3종 편곡 템플릿을 쓴다.
-  길이는 150~210초 사이에서 게놈이 정한다.
+`main` 브랜치에 푸시하면 GitHub Actions가 테스트와 빌드를 거쳐 GitHub Pages로 배포합니다.
 
-### 편곡 엔진
+## License
 
-- 편곡(`src/core/blueprint.ts` + `src/core/blueprints/`)은 "섹션 배열 + 레이어별 큐"로
-  선언한 데이터를 해석하는 방식이다. 각 섹션은 어떤 레이어가 언제 들어오고 빠지는지,
-  타격 밀도가 마디마다 어떻게 늘어나는지(중요도 맵 + 밀도 임계값, 늘어날수록 이전에 치던
-  스텝은 계속 친다), 필(fill)이 어디에 들어가는지를 갖고 있다.
-- compute/metropolis는 원곡의 실측 타이밍을 그대로 옮겼다 — 초반엔 4분·8분 위주로 단순하게
-  가다가 특정 마디부터 16분으로 쪼개져 고조되는 흐름, 버스트·정지·롤 같은 원곡 특유의
-  구간도 재현한다. 다만 원곡의 멜로디·리프 음 배열 자체는 절대 그대로 쓰지 않는다 — 리듬
-  구조(언제 쪼개지는지)만 가져오고, 실제 음은 전부 게놈에서 새로 만든다.
-- 드럼 킷도 계열마다 다르다: compute는 `circuit`, metropolis는 `skyline`이라는 자체 합성
-  킥/스네어/햇/클랩을 쓰고(io-808 발상, 렌더 시작 때 한 번 합성, 파라미터를 시드로 ±15%
-  흔든다), 기존 3종 템플릿은 TR-808 샘플에 더해 `uzu-drumkit`·Simmons 샘플 킷 중 하나를
-  시드로 골라 쓴다.
-- 곡마다 반드시 다른 "시그니처 사운드"를 보컬 자리에 채운다: 로봇 목소리가 시드 코드를
-  한 글자씩 읽거나(eSpeak NG로 미리 렌더링), 우주 교신음·금속 벨·계산기/타자기 소리·모뎀·
-  탐사선 소리 중 하나를 시드가 고른다.
+MIT © htjworld
 
-### 오디오 그래프
-
-- 마스터에는 킥 사이드체인 펌핑, 생성한 임펄스 응답 기반 리버브, 점8분 딜레이, 새추레이션,
-  리미터가 걸려 있고, 마지막에 RMS 기준으로 한 번 정규화해서 시드마다 체감 음량이
-  들쭉날쭉하지 않게 맞춘다.
-- 드럼 샘플(`public/samples`, 전부 CC0/퍼블릭 도메인)은 킷별 매니페스트로 관리한다 —
-  트랙 하나가 실제로 쓰는 킷 파일만 받아서, 샘플 종류가 늘어나도 첫 재생이 느려지지
-  않는다. 출처는 `public/samples/CREDITS.txt`.
-- 오디오는 `OfflineAudioContext`로 트랙 전체를 한 번 렌더링(진행률 표시)해서 그대로
-  재생하고, 다운로드는 같은 버퍼를 WAV로 인코딩한다. 매트릭스 에디터나 크로스헤어, 내 소리
-  패널을 열면 편집 반응을 위해 한 마디 미리듣기 루프로 자동 전환된다.
-- 렌더링 샘플레이트는 재생에 쓸 `AudioContext`에 맞춘다. 사파리는 버퍼와 컨텍스트의
-  샘플레이트가 어긋나면 리샘플링 없이 무음을 내보낸다.
-
-### 편집과 공유
-
-- 재생바는 구간 이동이 된다. 섹션 경계가 바 위에 표시되므로 드롭이나 브레이크로 바로
-  건너뛸 수 있다.
-- 매트릭스 에디터에서 킥/리드 스텝을 토글하면 `pattern` 쿼리 파라미터로, 크로스헤어
-  컨트롤(템포/톤)은 `crosshair` 쿼리 파라미터로 인코딩되어 링크 하나로 공유된다.
-- "내 소리" 패널에서 직접 녹음했거나 쓸 권리가 있는 소리를 킥/스네어/햇/퍼커션/시그니처
-  슬롯에 끼워 넣을 수 있다. 파일은 브라우저 IndexedDB에만 저장되고 서버로 올라가지
-  않으며, 공유 링크에는 `kit=local` 표시만 붙는다 — 개인 파일 자체는 링크에 담기지
-  않고, 받는 사람은 기본 킷으로만 듣는다.
-- 경로는 `/krachwerk/{seed}?pattern=...&crosshair=...&kit=local` 형태이며, GitHub
-  Pages의 서버 라우팅 부재는 `public/404.html`의 spa-github-pages 리다이렉트로 우회한다.
-
-## 스택
-
-Vite, React, TypeScript. 런타임 의존성은 React뿐이고, 나머지는 전부 표준 Web API로
-처리한다.
-
-## 디자인
-
-팔레트, 타이포그래피, 톤 원칙은 [`DESIGN.md`](./DESIGN.md) 참고.
-
-## 배포
-
-`main` 브랜치에 푸시하면 `.github/workflows/deploy.yml`이 테스트 실행 후 빌드하고
-GitHub Pages로 배포한다.
+오디오 샘플은 모두 CC0 또는 퍼블릭 도메인이며 출처는 [`public/samples/CREDITS.txt`](./public/samples/CREDITS.txt)에 있습니다. `public/faces/`의 아티스트 이미지는 이 라이선스에 포함되지 않습니다.
