@@ -35,15 +35,29 @@ const RENDER_DEBOUNCE_MS = 250;
 // 렌더링 전에 이 컨텍스트의 샘플레이트를 알아야 해서 재생 시점보다 먼저 만든다.
 let sharedContext: AudioContext | null = null;
 
+// 사파리/iOS는 AudioContext를 destination에 직접 물려서 내는 소리는 화면이 잠기거나 앱이
+// 백그라운드로 가면 끊어버린다. <audio> 엘리먼트로 재생 중인 소리만 백그라운드에서 살려주므로,
+// 실제 출력은 MediaStreamDestination을 거쳐 숨겨진 <audio> 태그로 흘려보낸다.
+let sharedSink: AudioNode | null = null;
+let sharedAudioEl: HTMLAudioElement | null = null;
+
 function audioContext(): AudioContext | null {
   if (!sharedContext) {
     try {
       sharedContext = new AudioContext();
+      const dest = sharedContext.createMediaStreamDestination();
+      sharedAudioEl = new Audio();
+      sharedAudioEl.srcObject = dest.stream;
+      sharedSink = dest;
     } catch {
       return null;
     }
   }
   return sharedContext;
+}
+
+function outputSink(): AudioNode | null {
+  return sharedSink;
 }
 
 // 사파리/iOS는 첫 소리가 사용자 제스처 안에서 시작돼야 그 뒤로 오디오를 열어준다.
@@ -56,8 +70,9 @@ function unlockAudio(ctx: AudioContext): void {
   try {
     const source = ctx.createBufferSource();
     source.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
-    source.connect(ctx.destination);
+    source.connect(outputSink() ?? ctx.destination);
     source.start(0);
+    void sharedAudioEl?.play();
   } catch {
     // 잠금 해제는 실패해도 재생 자체를 막지 않는다.
   }
@@ -112,7 +127,7 @@ export function usePlayer(
       const source = ctx.createBufferSource();
       source.buffer = rendered;
       source.loop = mode === "loop";
-      source.connect(ctx.destination);
+      source.connect(outputSink() ?? ctx.destination);
       source.onended = () => {
         if (sourceRef.current !== source) return;
         sourceRef.current = null;
@@ -210,6 +225,7 @@ export function usePlayer(
     if (ctx) {
       void ctx.resume();
       unlockAudio(ctx);
+      void sharedAudioEl?.play();
     }
     setIsPlaying(true);
     startFrom(offsetRef.current);
