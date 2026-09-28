@@ -128,11 +128,17 @@ export function usePlayer(
       source.buffer = rendered;
       source.loop = mode === "loop";
       source.connect(outputSink() ?? ctx.destination);
+      // 스트림 싱크로 낼 땐 <audio>가 재생 중이어야 소리가 나간다. play()는 이미 재생 중이면
+      // no-op라, 렌더 중 프리뷰가 이 함수를 반복 호출해도 안전하다.
+      void sharedAudioEl?.play();
       source.onended = () => {
         if (sourceRef.current !== source) return;
         sourceRef.current = null;
         offsetRef.current = 0;
         setIsPlaying(false);
+        // 곡이 끝나면 무한 스트림을 소비하는 <audio>도 멈춰야 스피커 표시가 꺼지고,
+        // 사파리가 마지막 버퍼를 반복 재생(띡띡띡)하지 않는다.
+        sharedAudioEl?.pause();
       };
       source.start(0, at);
       sourceRef.current = source;
@@ -216,6 +222,7 @@ export function usePlayer(
     if (isPlaying) {
       offsetRef.current = getPosition();
       stopSource();
+      sharedAudioEl?.pause();
       setIsPlaying(false);
       return;
     }
@@ -225,10 +232,9 @@ export function usePlayer(
     if (ctx) {
       void ctx.resume();
       unlockAudio(ctx);
-      void sharedAudioEl?.play();
     }
     setIsPlaying(true);
-    startFrom(offsetRef.current);
+    startFrom(offsetRef.current); // 여기서 <audio>.play()까지 해준다
   }, [isPlaying, getPosition, startFrom, stopSource]);
 
   const hold = useCallback(() => {
@@ -236,6 +242,8 @@ export function usePlayer(
     if (isPlaying) offsetRef.current = getPosition();
     holdRef.current = true;
     stopSource();
+    // 재생바를 잡는 동안에도 스트림 소비를 멈춘다. seek가 startFrom으로 다시 틀어준다.
+    sharedAudioEl?.pause();
   }, [isPlaying, getPosition, stopSource]);
 
   const seek = useCallback(
